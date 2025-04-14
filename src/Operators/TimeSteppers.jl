@@ -12,8 +12,11 @@ using Printf
 
 using Random, Distributions
 using ..core_2D_spread: ParticleDefaults, InitParticleInstance
+using ...custom_structures: ParticleInstance2D
 
 using Oceananigans.TimeSteppers: tick!
+
+using DataFrames, CSV, Dates
 
 function mean_of_state(model::Abstract2DModel)
     return mean(model.State[:, :, 1])
@@ -26,6 +29,34 @@ end
 
 ################# 1D ####################
 
+function write_particles_to_csv(wave_model, Δt)
+    sec=string(Int64(floor((wave_model.clock.time+Δt)/60)))
+    dec=string(Int64(floor(10*((wave_model.clock.time+Δt)/60-floor((wave_model.clock.time+Δt)/60)))))
+    save_path = wave_model.plot_savepath
+
+    nParticles = wave_model.n_particles_launch
+    @info wave_model.clock.time/60
+
+    parts = wave_model.ParticleCollection[(end-nParticles+1):end]
+
+    logE = zeros(nParticles)
+    cx = zeros(nParticles)
+    cy = zeros(nParticles)
+    x = zeros(nParticles)
+    y = zeros(nParticles)
+    for i in 1:nParticles
+            logE[i] = parts[i].ODEIntegrator[1]
+            cx[i] = parts[i].ODEIntegrator[2]
+            cy[i] = parts[i].ODEIntegrator[3]
+            x[i] = parts[i].ODEIntegrator[4]
+            y[i] = parts[i].ODEIntegrator[5]
+    end
+
+    data = DataFrame(id=1:nParticles, logE = logE, cx = cx, cy = cy, x = x, y = y)
+    data2 = Tables.table(transpose(wave_model.State[:, :, 1]))
+    CSV.write(save_path*"/data/particles_"*sec*","*dec*".csv", data)
+    CSV.write(save_path*"/data/mesh_values_"*sec*","*dec*".csv", data2)
+end
 
 """
 time_step!(model, Δt; callbacks=nothing)
@@ -123,7 +154,11 @@ function time_step!(model::Abstract2DModel, Δt::Float64; callbacks=nothing, deb
                                 model.periodic_boundary,
                                 model.ODEdefaults)
     end
-    
+
+    if model.save_particles && length(model.ParticleCollection) > 0
+        write_particles_to_csv(model, Δt)
+    end
+
     for (i,j) in [(i,j) for i in 1:model.grid.Nx for j in 1:model.grid.Ny]
         weights = [model.ParticlesAtNode[i][j][k][1] for k in 1:length(model.ParticlesAtNode[i][j])]
         values = [model.ParticlesAtNode[i][j][k][2] for k in 1:length(model.ParticlesAtNode[i][j])]
@@ -215,11 +250,22 @@ function time_step!(model::Abstract2DModel, Δt::Float64; callbacks=nothing, deb
         nPreviousParticles = 0
         model.ParticlePool = []
         
-        for (i,j) in [(i,j) for i in 1:model.grid.Nx for j in 1:model.grid.Ny]
+        @threads for (i,j) in [(i,j) for i in 1:model.grid.Nx for j in 1:model.grid.Ny]
             locallen = length(model.ParticlesAtNode[i][j])
             nPreviousParticles += locallen
-            for k in 1:locallen
-                push!(model.ParticlePool, [deepcopy(model.ParticlesAtNode[i][j][k][3]), i, j, exp(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[1])*model.ParticlesAtNode[i][j][k][1]])
+            @threads for k in 1:locallen
+
+                Upart=model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u
+                # newodeint=init(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.t,[deepcopy(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[1]), deepcopy(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[2]), deepcopy(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[3]), deepcopy(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[4]), deepcopy(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[5]), deepcopy(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[6])])
+                # println(newodeint)
+                # println()
+                
+                z_init = ParticleDefaults(Upart[1],Upart[2],Upart[3],Upart[4],Upart[5],Upart[6])
+                newpart=InitParticleInstance(model.ODEsystem,z_init,model.ODEsettings,(i,j),false,true)
+                push!(model.ParticlePool, [newpart, i, j, exp(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[1])*model.ParticlesAtNode[i][j][k][1]])
+
+                #newpart2=[deepcopy(model.ParticlesAtNode[i][j][k][3]), i, j, exp(model.ParticlesAtNode[i][j][k][3].ODEIntegrator.u[1])*model.ParticlesAtNode[i][j][k][1]]
+                #push!(model.ParticlePool, newpart2)
             end
         end
 
@@ -300,7 +346,7 @@ function time_step!(model::Abstract2DModel, Δt::Float64; callbacks=nothing, deb
     #print("mean energy after remesh ", mean_of_state(model), "\n")
 
     tick!(model.clock, Δt)
-    @printf(" mean energy %.6f ", mean_of_state(model))
+    #@printf(" mean energy %.6f ", mean_of_state(model))
 
 end
 

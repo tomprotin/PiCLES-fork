@@ -22,6 +22,8 @@ import Oceananigans: fields
 using Oceananigans.TimeSteppers: Clock
 using ...FetchRelations
 
+using LinearAlgebra
+
 #includet("mapping_1D.jl")
 
 # TO DO : check if all the modules imported above are necessary, for now I just copied the ones from WaveGrowthModels2D.jl
@@ -56,8 +58,10 @@ mutable struct GeometricalOptics{Grid<:AbstractGrid,
                         bl_type,
                         as_type,
                         as_thresh,
+                        pb_cov_init,
                         plt_steps,
                         plt_path,
+                        sve_part,
                         nPart,
                         wnds,
                         cur,
@@ -89,9 +93,13 @@ mutable struct GeometricalOptics{Grid<:AbstractGrid,
 
     angular_spreading_thresh::as_thresh     # threshold for splitting
     angular_spreading_type::as_type     # type of angular spreading used
+    proba_covariance_init::pb_cov_init     # initial probability density 4x4 covariance matrix of particles
 
     plot_steps::plt_steps          # Whether or not to plot the steps 
     plot_savepath::plt_path         # The path to use for saving plots
+
+    save_particles::sve_part        # Whether or not to save particle data
+
     n_particles_launch::nPart       # Number of particles to launch from each node when using a nonparametric spreading type
 
     winds::wnds     # u, v, if needed u_x, u_y
@@ -142,7 +150,7 @@ function GeometricalOptics(; grid::TwoDGrid,
     ODEsys, 
     ODEvars=nothing, #needed for MTK for ODEsystem. will be depriciated later
     layers::Int=1,
-    clock=Clock{eltype(grid)}(0, 0, 1),
+    clock=Clock{eltype(grid)}(;time=0, last_Δt=0, last_stage_Δt=1),
     ODEsets::AbstractODESettings=nothing,  # ODE_settings
     ODEinit_type::PP= "wind_sea",  # default_ODE_parameters
     minimal_particle=nothing, # minimum particle the model falls back to if a particle fails to integrate
@@ -152,8 +160,10 @@ function GeometricalOptics(; grid::TwoDGrid,
     boundary_type="same", # or "minimal", "same", default is same, only used if periodic_boundary is false
     angular_spreading_thresh=π/8,
     angular_spreading_type="stochast",  # or "geometrical" or "nonparametric"
+    proba_covariance_init = Matrix(I,4,4)*10^(-50),
     plot_steps=false,
     plot_savepath="",
+    save_particles=false,
     n_particles_launch=150,
     CBsets=nothing,
     movie=false) where {PP<:Union{ParticleDefaults2D,String}}
@@ -283,8 +293,10 @@ function GeometricalOptics(; grid::TwoDGrid,
         boundary, boundary_defaults,
         angular_spreading_thresh,
         angular_spreading_type,
+        proba_covariance_init,
         plot_steps,
         plot_savepath,
+        save_particles,
         n_particles_launch,
         winds,
         currents,

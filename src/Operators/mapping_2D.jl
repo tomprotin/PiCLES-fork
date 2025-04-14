@@ -120,7 +120,9 @@ function advance!(PI::AbstractParticleInstance,
         if PI.on #& ~PI.boundary # if Particle is on and not boundary
         
                 try
-                        step!(PI.ODEIntegrator, DT, true)
+                        PI.ODEIntegrator.u[4] += DT*PI.ODEIntegrator.u[2]
+                        PI.ODEIntegrator.u[5] += DT*PI.ODEIntegrator.u[3]
+                        # step!(PI.ODEIntegrator, DT, true)
                 catch e
                         @printf "error on advancing ODE:\n"
                         print("- time after fail $(PI.ODEIntegrator.t)\n ")
@@ -168,6 +170,10 @@ function advance!(PI::AbstractParticleInstance,
                 @info "position or Energy is nan, reset"
                 @info PI.position_ij
                 @show PI
+                @info PI.ODEIntegrator.uprev
+                @info PI.ODEIntegrator.uprev2
+
+                test.test
                 
                 t_end = t_start + DT
                 winds_start = convert(  Tuple{Float64,Float64},

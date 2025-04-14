@@ -16,6 +16,10 @@ using Statistics
 
 import Plots as plt
 
+using DataFrames, CSV
+using Random, Distributions
+using Dates
+
 #using ThreadsX
 
 function mean_of_state(model::Abstract2DModel)
@@ -42,6 +46,35 @@ function plot_state_and_error_points(wave_simulation, gn)
                 ylims=(gn.ymin, gn.ymax)) |> display
 end
 
+function write_particles_to_csv(wave_model)
+        sec=string(Int64(floor((wave_model.clock.time)/60)))
+        dec=string(Int64(floor(10*(wave_model.clock.time/60-floor((wave_model.clock.time)/60)))))
+        save_path = wave_model.plot_savepath
+
+        nParticles = wave_model.n_particles_launch
+        @info wave_model.clock.time/60
+
+        parts = wave_model.ParticleCollection[(end-nParticles+1):end]
+
+        logE = zeros(nParticles)
+        cx = zeros(nParticles)
+        cy = zeros(nParticles)
+        x = zeros(nParticles)
+        y = zeros(nParticles)
+        for i in 1:nParticles
+                logE[i] = parts[i].ODEIntegrator[1]
+                cx[i] = parts[i].ODEIntegrator[2]
+                cy[i] = parts[i].ODEIntegrator[3]
+                x[i] = parts[i].ODEIntegrator[4]
+                y[i] = parts[i].ODEIntegrator[5]
+        end
+    
+        data = DataFrame(id=1:nParticles, logE = logE, cx = cx, cy = cy, x = x, y = y)
+        data2 = Tables.table(transpose(wave_model.State[:, :, 1]))
+        CSV.write(save_path*"/data/particles_"*sec*","*dec*".csv", data)
+        CSV.write(save_path*"/data/mesh_values_"*sec*","*dec*".csv", data2)
+    end
+
 function get_tot_energy_domain(wave_simulation)
         return sum(wave_simulation.model.State[:,:,1])
 end
@@ -54,10 +87,48 @@ Needs time_step! to be defined for the model, and push_state_to_storage! to be d
 function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
         save_path = sim.model.plot_savepath
 
+        if sim.model.save_particles
+                save_path = sim.model.plot_savepath
+                filename = save_path*"/data/simu_infos.csv"
+
+                Nx = sim.model.grid.Nx
+                Ny = sim.model.grid.Ny
+                xmin = sim.model.grid.xmin
+                xmax = sim.model.grid.xmax
+                ymin = sim.model.grid.ymin
+                ymax = sim.model.grid.ymax
+                lne_source = sim.model.ODEdefaults.lne
+                c_x_source = sim.model.ODEdefaults.c̄_x
+                c_y_source = sim.model.ODEdefaults.c̄_y
+                x_source = sim.model.ODEdefaults.x
+                y_source = sim.model.ODEdefaults.y
+                angular_spread_source = sim.model.ODEdefaults.angular_σ
+                Δt = sim.Δt
+                stop_time = sim.stop_time
+
+                data = DataFrame(Nx=Nx, Ny=Ny, xmin=xmin,
+                                xmax=xmax, ymin=ymin, ymax=ymax,
+                                lne_source=lne_source, c_x_source=c_x_source,
+                                c_y_source=c_y_source, x_source=x_source,y_source=y_source,
+                                angular_spread_source=angular_spread_source,
+                                Δt=Δt, stop_time=stop_time)
+                CSV.write(filename, data)
+
+                filename2 = save_path*"/data/sigma.csv"
+
+                covariance_init = sim.model.proba_covariance_init
+                data2 = DataFrame(covariance_init, :auto)
+                CSV.write(filename2, data2)
+        end
+
         start_time_step = time_ns()
 
         if !(sim.initialized) # execute initialization step
                 initialize_simulation!(sim)
+        end
+
+        if sim.model.save_particles && length(sim.model.ParticleCollection) > 0
+                write_particles_to_csv(sim.model)
         end
 
         #sim.running = true
@@ -95,9 +166,56 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                 #reset State
                 sim.model.State .= 0.0
                 # do time step
-                
+
+                #launch new batch of particles from cyclic launch
+                if length(sim.model.PointSourceList) > 0
+                        for k in 1:length(sim.model.PointSourceList)
+                                currentParticle = sim.model.PointSourceList[k].particleLaunch
+                                currentFirstTimeLaunched = sim.model.PointSourceList[k].firstTimeLaunched
+                                period = sqrt(sim.model.grid.dx*sim.model.grid.dy
+                                                /
+                                        (currentParticle.c̄_x^2+currentParticle.c̄_y^2))
+
+                                t = sim.model.ParticleCollection[end].ODEIntegrator.t
+                                #computing how many batches of particles have to be launched
+                                timePrevLaunch = t >= currentFirstTimeLaunched ? t - (t - currentFirstTimeLaunched)%period : -1.0
+                                nBatch = 0
+
+                                while timePrevLaunch > sim.model.ParticleCollection[end].ODEIntegrator.t - sim.Δt
+                                        nBatch+=1
+                                        timePrevLaunch-=period
+                                end
+
+                                for nB in 1:nBatch
+                                        i = Int64(floor((sim.model.PointSourceList[k].particleLaunch.x - sim.model.grid.xmin) / sim.model.grid.dx)) + 1
+                                        j = Int64(floor((sim.model.PointSourceList[k].particleLaunch.y - sim.model.grid.ymin) / sim.model.grid.dy)) + 1
+                                        n_part = sim.model.n_particles_launch
+
+                                        defaults_temp = deepcopy(sim.model.PointSourceList[k].particleLaunch)
+                                        defaults_temp.lne -= log(n_part)
+                                        basePart = SeedParticle(sim.model.State,
+                                                        (i,j), sim.model.ODEsystem, defaults_temp,
+                                                        sim.model.ODEsettings,gridnotes, sim.model.winds,
+                                                        sim.model.ODEsettings.timestep, sim.model.boundary,
+                                                        sim.model.periodic_boundary)
+                                        for _ in 1:n_part
+                                                delta_phi = rand() * defaults_temp.angular_σ - 0.5*defaults_temp.angular_σ
+                                                c_x = defaults_temp.c̄_x * cos(delta_phi) - defaults_temp.c̄_y * sin(delta_phi)
+                                                c_y = defaults_temp.c̄_x * sin(delta_phi) + defaults_temp.c̄_y * cos(delta_phi)
+                                                push!(sim.model.ParticleCollection, deepcopy(basePart))
+                                                sim.model.ParticleCollection[end].ODEIntegrator.u[2] = c_x
+                                                sim.model.ParticleCollection[end].ODEIntegrator.u[3] = c_y
+                                                sim.model.ParticleCollection[end].ODEIntegrator.uprev[2] = c_x
+                                                sim.model.ParticleCollection[end].ODEIntegrator.uprev[3] = c_y
+                                                sim.model.ParticleCollection[end].ODEIntegrator.uprev2[2] = c_x
+                                                sim.model.ParticleCollection[end].ODEIntegrator.uprev2[3] = c_y
+                                        end
+                                end
+                                #@info "nBatch = ", nBatch
+                        end
+                end
                 time_step!(sim.model, sim.Δt, debug=debug)
-                
+
                 if debug & (length(sim.model.FailedCollection) > 0)
                         @info "debug mode:"
                         @info "found failed particles"
@@ -128,14 +246,12 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
 
                 end
                 sim.running = sim.stop_time >= sim.model.clock.time ? true : false
-                @info sim.model.clock
 
                 if sim.model.plot_steps
-                        @info "plot"
                         plot_state_and_error_points(sim, gridnotes)
-                        plt.savefig(joinpath([save_path, "energy_plot_no_spread_"*string(Int64(floor((sim.model.clock.time)/60)))*".png"]))
-                else
-                        @info "not plot"
+                        sec=string(Int64(floor((sim.model.clock.time)/60)))
+                        dec=string(Int64(floor(10*(sim.model.clock.time/60-floor((sim.model.clock.time)/60)))))
+                        plt.savefig(joinpath([save_path*"/plots/", "energy_plot_no_spread_"*sec*","*dec*".png"]))
                 end
 
         end
@@ -271,21 +387,77 @@ function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::
                 j = Int64(floor((defaults.y - model.grid.ymin) / model.grid.dy)) + 1
                 gridnotes = TwoDGridNotes(model.grid)
                 if model.angular_spreading_type == "nonparametric"
-                        # if "nonparametric" is used, initialize a bigger number of particles at the original perturbation
-                        n_part = model.n_particles_launch
-                        for _ in 1:n_part
-                                defaults_temp = deepcopy(defaults)
-                                delta_phi = rand() * defaults_temp.angular_σ - 0.5*defaults_temp.angular_σ
-                                c_x = defaults_temp.c̄_x * cos(delta_phi) - defaults_temp.c̄_y * sin(delta_phi)
-                                c_y = defaults_temp.c̄_x * sin(delta_phi) + defaults_temp.c̄_y * cos(delta_phi)
-                                defaults_temp.lne += -log(n_part)
-                                defaults_temp.c̄_x = c_x
-                                defaults_temp.c̄_y = c_y
-                                push!(ParticleCollection, SeedParticle(model.State,
-                                                (i,j), model.ODEsystem, defaults_temp,
-                                                model.ODEsettings,gridnotes, model.winds,
-                                                model.ODEsettings.timestep, model.boundary,
-                                                model.periodic_boundary))
+                        if sum(model.proba_covariance_init)==4e-50
+                                # if "nonparametric" is used, initialize a bigger number of particles at the original perturbation
+                                n_part = model.n_particles_launch
+                                for _ in 1:n_part
+                                        defaults_temp = deepcopy(defaults)
+                                        delta_phi = rand() * defaults_temp.angular_σ - 0.5*defaults_temp.angular_σ
+                                        c_x = defaults_temp.c̄_x * cos(delta_phi) - defaults_temp.c̄_y * sin(delta_phi)
+                                        c_y = defaults_temp.c̄_x * sin(delta_phi) + defaults_temp.c̄_y * cos(delta_phi)
+                                        defaults_temp.lne += -log(n_part)
+                                        defaults_temp.c̄_x = c_x
+                                        defaults_temp.c̄_y = c_y
+                                        push!(ParticleCollection, SeedParticle(model.State,
+                                                        (i,j), model.ODEsystem, defaults_temp,
+                                                        model.ODEsettings,gridnotes, model.winds,
+                                                        model.ODEsettings.timestep, model.boundary,
+                                                        model.periodic_boundary))
+                                end
+                        else
+                                n_part = model.n_particles_launch
+                                for _ in 1:n_part
+                                        defaults_temp = deepcopy(defaults)
+                                        mu = [defaults_temp.c̄_x, defaults_temp.c̄_y, defaults_temp.x, defaults_temp.y]
+                                        d = MvNormal(mu, model.proba_covariance_init)
+                                        real = rand(d,1)
+                                        # delta_phi = real[1]
+                                        # delta_phi < 0 ? delta_phi = - delta_phi : delta_phi = delta_phi
+                                        # delta_phi < 0.01 ? delta_phi+=1 : delta_phi +=0
+                                        # c_x = (real[2]+1)*(defaults_temp.c̄_x * cos(delta_phi) - defaults_temp.c̄_y * sin(delta_phi))
+                                        # c_y = (real[2]+1)*(defaults_temp.c̄_x * sin(delta_phi) + defaults_temp.c̄_y * cos(delta_phi))
+                                        c_x = real[1]
+                                        c_y = real[2]
+                                        defaults_temp.lne += -log(n_part)
+                                        defaults_temp.c̄_x = c_x
+                                        defaults_temp.c̄_y = c_y
+                                        defaults_temp.x = real[3]
+                                        defaults_temp.y = real[4]
+                                        push!(ParticleCollection, SeedParticle(model.State,
+                                                        (i,j), model.ODEsystem, defaults_temp,
+                                                        model.ODEsettings,gridnotes, model.winds,
+                                                        model.ODEsettings.timestep, model.boundary,
+                                                        model.periodic_boundary))
+                                end
+                                # for _ in 1:n_part
+                                #         temp_boucle = true
+                                #         while temp_boucle
+                                #                 defaults_temp = deepcopy(defaults)
+                                #                 mu = [defaults_temp.c̄_x, defaults_temp.c̄_y, defaults_temp.x, defaults_temp.y]
+                                #                 d = MvNormal(mu, model.proba_covariance_init)
+                                #                 real = rand(d,1)
+                                #                 delta_phi = real[1]
+                                #                 #delta_phi < 0 ? delta_phi = - delta_phi : delta_phi = delta_phi
+                                #                 #delta_phi < 0.01 ? delta_phi+=1 : delta_phi +=0
+                                #                 #c_x = (real[2]+1)*(defaults_temp.c̄_x * cos(delta_phi) - defaults_temp.c̄_y * sin(delta_phi))
+                                #                 #c_y = (real[2]+1)*(defaults_temp.c̄_x * sin(delta_phi) + defaults_temp.c̄_y * cos(delta_phi))
+                                #                 c_x = real[1]
+                                #                 c_y = real[2]
+                                #                 defaults_temp.lne += -log(n_part)
+                                #                 defaults_temp.c̄_x = c_x
+                                #                 defaults_temp.c̄_y = c_y
+                                #                 defaults_temp.x = real[3]
+                                #                 defaults_temp.y = real[4]
+                                #                 if c_x^2+c_y^2<=1
+                                #                         push!(ParticleCollection, SeedParticle(model.State,
+                                #                                 (i,j), model.ODEsystem, defaults_temp,
+                                #                                 model.ODEsettings,gridnotes, model.winds,
+                                #                                 model.ODEsettings.timestep, model.boundary,
+                                #                                 model.periodic_boundary))
+                                #                         temp_boucle = false
+                                #                 end
+                                #         end
+                                # end
                         end
                 else
                         push!(ParticleCollection, SeedParticle(model.State,
@@ -304,6 +476,31 @@ function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::
                                                 model.ODEsettings,gridnotes, model.winds,
                                                 model.ODEsettings.timestep, model.boundary,
                                                 model.periodic_boundary))
+                end
+        end
+
+        if length(model.PointSourceList) != 0
+                @info "launching cyclic point source particles"
+                for k in 1:length(model.PointSourceList)
+                        if model.PointSourceList[k].firstTimeLaunched != 0.0
+                                i = Int64(floor((model.PointSourceList[k].particleLaunch.x - model.grid.xmin) / model.grid.dx)) + 1
+                                j = Int64(floor((model.PointSourceList[k].particleLaunch.y - model.grid.ymin) / model.grid.dy)) + 1
+                                n_part = model.n_particles_launch
+                                for _ in 1:n_part
+                                        defaults_temp = deepcopy(model.PointSourceList[k].particleLaunch)
+                                        delta_phi = rand() * defaults_temp.angular_σ - 0.5*defaults_temp.angular_σ
+                                        c_x = defaults_temp.c̄_x * cos(delta_phi) - defaults_temp.c̄_y * sin(delta_phi)
+                                        c_y = defaults_temp.c̄_x * sin(delta_phi) + defaults_temp.c̄_y * cos(delta_phi)
+                                        defaults_temp.lne += -log(n_part)
+                                        defaults_temp.c̄_x = c_x
+                                        defaults_temp.c̄_y = c_y
+                                        push!(ParticleCollection, SeedParticle(model.State,
+                                                        (i,j), model.ODEsystem, defaults_temp,
+                                                        model.ODEsettings,gridnotes, model.winds,
+                                                        model.ODEsettings.timestep, model.boundary,
+                                                        model.periodic_boundary))
+                                end
+                        end
                 end
         end
         nothing
