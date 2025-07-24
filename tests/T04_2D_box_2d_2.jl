@@ -35,13 +35,13 @@ using Revise
 #using ProfileView
 
 # %%
-save_path = "plots/tests/T04_box_2d_2/"
+save_path = "plots/tests/paper/T04_box_2d_2/"
 mkpath(save_path)
 
 # % Parameters
 U10,V10           = 10.0, 10.0
 dt_ODE_save       = 30minutes
-DT                = 30minutes
+DT                = 10minutes
 # version 3
 r_g0              = 0.85
 
@@ -89,7 +89,7 @@ typeof(winds.u(1e3, 1e3, 11))
 # typeof(winds.u(x, y, t))
 # %%
 
-grid = TwoDGrid(10e3, 31, 10e3, 31)
+grid = TwoDGrid(10e3, 101, 10e3, 101)
 mesh = TwoDGridMesh(grid, skip=1);
 gn = TwoDGridNotes(grid);
 
@@ -108,7 +108,7 @@ particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q, input=true,
 # define V4 parameters absed on Const NamedTuple:
 default_ODE_parameters = (r_g = r_g0, C_α = Const_Scg.C_alpha, 
                                     C_φ = Const_ID.c_β, C_e = Const_ID.C_e, g= 9.81 );
-plt.scalefontsizes(1.75)
+#plt.scalefontsizes(1.75)
 
 # define setting and standard initial conditions
 WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT );
@@ -135,7 +135,7 @@ ODE_settings    = PW.ODESettings(
     save_everystep=false)
 
 
-default_particle = ParticleDefaults(1, 0, 2.12, 5000.0, 500.0, π/4)
+default_particle = ParticleDefaults(1, 1.5, 1.5, 500.0, 500.0, π/4)
 
 # Define grid
 #grid = TwoDGrid(150e3, 50, 150e3, 50)
@@ -160,25 +160,25 @@ wave_model = GeometricalOpticsModels.GeometricalOptics(; grid=grid,
     ODEsets=ODE_settings,  # ODE_settings
     #ODEinit_type="wind_sea",   # default_ODE_parameters
     #ODEinit_type="mininmal",
-    #ODEinit_type=default_particle,
+    ODEinit_type=default_particle,
     periodic_boundary=false,
     boundary_type="same",
     #minimal_particle=FetchRelations.MinimalParticle(U10, V10, DT),
     movie=true,
     plot_steps=true,
-    plot_savepath="plots/tests/T04_box_2d_2/nonparametric",
+    plot_savepath="plots/tests/paper/T04_box_2d_2/nonparametric",
     angular_spreading_type="nonparametric"
-    ,n_particles_launch=20
+    ,n_particles_launch=10000
     )
 
-PS1 = PointSource(default_particle,0.0)
-SourcesList = Array{Any,1}()
-push!(SourcesList, PS1)
+#PS1 = PointSource(default_particle,0.0)
+#SourcesList = Array{Any,1}()
+#push!(SourcesList, PS1)
 
 ### build Simulation
 #wave_simulation = Simulation(wave_model, Δt=10minutes, stop_time=4hours)#1hours)
-wave_simulation = Simulation(wave_model, Δt=2minutes, stop_time=60minutes)#1hours)
-initialize_wave_sources!(wave_simulation, SourcesList)
+wave_simulation = Simulation(wave_model, Δt=1.4minutes, stop_time=60minutes)#1hours)
+#initialize_wave_sources!(wave_simulation, SourcesList)
 initialize_simulation!(wave_simulation)
 
 
