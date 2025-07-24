@@ -27,8 +27,12 @@ using PiCLES.Operators.core_2D_spread: GetGroupVelocity, speed
 
 using Revise
 
-save_path = "plots/tests/paper/test_case_1/"
+save_path = "plots/test_case_1/"
 mkpath(save_path)
+mkpath(save_path*"data/")
+mkpath(save_path*"plots/")
+touch(save_path*"data/simu_info.csv")
+touch(save_path*"data/sigma.csv")
 
 # % Parameters
 U10,V10           = 10.0, 10.0
@@ -101,13 +105,13 @@ wave_model = GeometricalOpticsModels.GeometricalOptics(; grid=grid,
     movie=true,
     plot_steps=true,
     save_particles=true,
-    plot_savepath="plots/tests/paper/test_case_1/v2_pi",
+    plot_savepath="plots/test_case_1",
     angular_spreading_type="nonparametric",
     proba_covariance_init = [1e-50 0 0 0;
                              0 1e-50 0 0;
                              0 0 1e-50 0
                              0 0 0 1e-50],
-    n_particles_launch=150000
+    n_particles_launch=15000
     )
 
 wave_simulation = Simulation(wave_model, Δt=0.75minutes, stop_time=60minutes)
