@@ -1,5 +1,4 @@
 using Pkg
-
 Pkg.activate("PiCLES/")
 
 using Base.Threads
@@ -24,7 +23,7 @@ import Oceananigans.Utils: prettytime
 
 using PiCLES.Architectures
 #using GLMakie
-#using PiCLES.Plotting.movie: init_movie_2D_box_plot
+using PiCLES.Plotting.movie: init_movie_2D_box_plot
 
 #using ProfileView
 using BenchmarkTools
@@ -73,8 +72,8 @@ default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
     C_φ=Const_ID.c_β, C_e=Const_ID.C_e, g=9.81)
 
 # define setting and standard initial conditions
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT)
-#WindSeamin = FetchRelations.get_minimal_windsea(u(0, 0, 0), v(0, 0, 0), DT / 2)
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
+#WindSeamin = FetchRelations.MinimalWindsea(u(0, 0, 0), v(0, 0, 0), DT / 2)
 #WindSeamin = FetchRelations.get_initial_windsea(u(0, 0, 0), v(0, 0, 0), DT/5)
 lne_local = log(WindSeamin["E"])
 cg_u_local = WindSeamin["cg_bar_x"]

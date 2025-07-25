@@ -13,7 +13,7 @@ export InitParticleValues
 #include("../Utils/FetchRelations.jl")
 using ...FetchRelations
 
-using ...Architectures: AbstractParticleInstance, AbstractMarkedParticleInstance
+using ...Architectures: AbstractParticleInstance, AbstractMarkedParticleInstance, StateTypeL1
 
 
 # using ..particle_waves_v3: init_vars

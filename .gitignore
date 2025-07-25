@@ -25,6 +25,9 @@ Manifest.toml
 
 config/config.json
 
+--temp/*
+Project_save.toml
+package_list.txt
 plots/*
 tests/test_boundary_effect.jl
 tests/test_debug.jl

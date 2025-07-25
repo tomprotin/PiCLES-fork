@@ -40,6 +40,9 @@ mkpath(save_path)
 save_path_data = "data/work/T04_2D_regtest_netCDF/"
 mkpath(save_path_data)
 
+
+load_path = "data/work/wind_data/"
+
 ##### basic parameters
 # timestep
 DT = 20minutes
@@ -47,17 +50,16 @@ DT = 20minutes
 U10, V10 = 10.0, 10.0
 
 # Define basic ODE parameters
-r_g0            = 0.85
-Const_ID        = PW.get_I_D_constant()
-@set Const_ID.γ = 0.88
-Const_Scg       = PW.get_Scg_constants(C_alpha=-1.41, C_varphi=1.81e-5)
+ODEpars, Const_ID, Const_Scg = PW.ODEParameters(r_g=0.85)
 
 
-function interpolate_winds(ds)
+function interpolate_winds(ds, multiplyer=0)
+
+    Nxx = Int(ceil(ds.attrib["Nx"] * sqrt(2)^multiplyer))
+    Nyy = Int(ceil(ds.attrib["Ny"] * sqrt(2)^multiplyer))
+
     # define grid based on
-    grid = TwoDGrid(ds["x"][end], Int(ceil(ds.attrib["Nx"] )),
-        ds["y"][end], Int(ceil(ds.attrib["Ny"] )))
-    #grid = TwoDGrid(ds["x"][end], 31, ds["y"][end], 31)
+    grid = TwoDGrid(ds["x"][end], Nxx, ds["y"][end], Nyy)
     grid_mesh = TwoDGridMesh(grid, skip=1)
     gn = TwoDGridNotes(grid)
 
@@ -66,15 +68,14 @@ function interpolate_winds(ds)
     T = 1day#hours#time_rel[end]
 
     nodes = (ds["x"][:], ds["y"][:], time_rel)
-    u_grid = LinearInterpolation(nodes, permutedims(ds["u10m"][:], [1, 2, 3]), extrapolation_bc=Flat())
-    v_grid = LinearInterpolation(nodes, permutedims(ds["v10m"][:] .+ 0.1, [1, 2, 3]), extrapolation_bc=Flat())
+    u_grid = LinearInterpolation(nodes, permutedims(ds["u10m"], [1, 2, 3]), extrapolation_bc=Flat())
+    v_grid = LinearInterpolation(nodes, permutedims(ds["v10m"], [1, 2, 3]), extrapolation_bc=Flat())
 
     return grid, grid_mesh, gn, T, u_grid, v_grid
 end
 
-
 # define ODE system and parameters
-#particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q);
+#particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q);
  
 
 default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
@@ -83,38 +84,48 @@ default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
 
 Revise.retry()
 # Default initial conditions based on timestep and chaeracteristic wind velocity
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT)
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
 default_particle = ParticleDefaults(WindSeamin["lne"], WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"], 0.0, 0.0)
 
-
-function make_reg_test(wave_model, save_path; plot_name="dummy", N=36)
+function make_reg_test_store(wave_model, save_path_name)
 
     ### build Simulation
     wave_simulation = Simulation(wave_model, Δt=DT, stop_time=wave_model.ODEsettings.total_time)#1hours)
     initialize_simulation!(wave_simulation)
 
     # run simulation & save simulation
-    init_state_store!(wave_simulation, save_path)
+    init_state_store!(wave_simulation, save_path_name)
     #run!(wave_simulation, cash_store=true, debug=true)
     run!(wave_simulation, store=true, cash_store=false, debug=false)
     close_store!(wave_simulation)
 
-    # # or, alternatively, make movie
+end
 
-    # fig, n = init_movie_2D_box_plot(wave_simulation, name_string="T01")
-    # #wave_simulation.stop_time += 1hour
-    # #N = 36
-    # #plot_name = "dummy"
-    # record(fig, save_path * plot_name * ".gif", 1:N, framerate=10) do i
-    #     @info "Plotting frame $i of $N..."
-    #     @info wave_simulation.model.clock
-    #     movie_time_step!(wave_simulation.model, wave_simulation.Δt)
+# or, alternatively, make movie
+function make_reg_test_movie(wave_model, save_path_name; N=36)
 
-    #     n[] = 1
-    # end
+    wave_simulation = Simulation(wave_model, Δt=DT, stop_time=wave_model.ODEsettings.total_time)#1hours)
+    initialize_simulation!(wave_simulation)
+
+    fig, n = init_movie_2D_box_plot(wave_simulation, name_string="T01")
+    #wave_simulation.stop_time += 1hour
+    #N = 36
+    #plot_name = "dummy"
+    record(fig, save_path_name * ".gif", 1:N, framerate=10) do i
+        @info "Plotting frame $i of $N..."
+        @info wave_simulation.model.clock
+        movie_time_step!(wave_simulation.model, wave_simulation.Δt)
+
+        n[] = 1
+    end
 
 end
 
+
+# %%
+case = "Test01_2D"
+ncfile = load_path * case * ".nc"
+ds = Dataset(ncfile, "r")
 
 # %%
 # loop over U10 and V10 range
@@ -124,7 +135,8 @@ case_list = ["Test04_2D", "Test05_2D", "Test06_2D", "Test07_2D"]
 #for I in CartesianIndices(gridmesh)
 for case in case_list
     # load netCDF file
-    ncfile = "data/work/wind_data/" * case * ".nc"
+    #ncfile = "data/work/wind_data/" * case * ".nc"
+    ncfile = load_path * case * ".nc"
     ds = Dataset(ncfile, "r")
 
     grid, grid_mesh, gn, T, u_grid, v_grid = interpolate_winds(ds)
@@ -134,7 +146,7 @@ for case in case_list
     winds = (u=u, v=v)
 
     #winds, u, v  =convert_wind_field_functions(u_func, v_func, x, y, t)
-    particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q)
+    particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q)
 
     # ... and ODESettings
     ODE_settings =  PW.ODESettings(
@@ -169,11 +181,13 @@ for case in case_list
     NN =Int(floor(wave_model.ODEsettings.total_time / wave_model.ODEsettings.timestep))
     
     # for saving data
-    #when saving data
+    # when saving data
     save_path_select = save_path_data
     mkpath(save_path_select * case)
     
     #when plotting data
     #save_path_select = save_path
-    make_reg_test(wave_model, save_path_select * case, plot_name=case, N=NN)
+    #make_reg_test_store(wave_model, save_path_select * case)
+
+    make_reg_test_movie(wave_model, save_path * case, N=NN)
 end

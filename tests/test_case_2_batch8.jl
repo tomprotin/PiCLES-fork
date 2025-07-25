@@ -74,7 +74,7 @@ default_ODE_parameters = (r_g = r_g0, C_α = Const_Scg.C_alpha,
 #plt.scalefontsizes(1.75)
 
 # define setting and standard initial conditions
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT );
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT );
 lne_local = log(WindSeamin["E"])
 
 ODE_settings    = PW.ODESettings(
@@ -113,10 +113,10 @@ wave_model = GeometricalOpticsModels.GeometricalOptics(; grid=grid,
                              0 3 0 0;
                              0 0 10^7 0
                              0 0 0 10^7],
-    n_particles_launch=10000
+    n_particles_launch=100000
     )
 
-wave_simulation = Simulation(wave_model, Δt=1minutes, stop_time=60minutes)
+wave_simulation = Simulation(wave_model, Δt=1minutes, stop_time=120minutes)
 initialize_simulation!(wave_simulation)
 
 

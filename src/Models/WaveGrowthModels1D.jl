@@ -4,7 +4,6 @@ export WaveGrowth1D
 export fields, reset_boundary!, show
 
 using ...Architectures
-using ModelingToolkit: get_states, ODESystem
 
 
 #using core_1D: MarkedParticleInstance
@@ -96,7 +95,7 @@ end
 function WaveGrowth1D(; grid::OneDGrid, winds, ODEsys, 
     ODEvars=nothing, #neede dfr MTK for ODEsystem. will be depriciated
     layers::Int=1,
-    clock=Clock{eltype(grid)}(0, 0, 1),
+    clock=Clock{eltype(grid)}(time=0.0),
     ODEsets::AbstractODESettings=nothing,    # ODE_settings
     ODEinit_type::PP="wind_sea", # or "minimal", or ParticleDefaults1D instance, default is wind_sea nothing,    # default_ODE_parameters
     minimal_particle=nothing, # minimum particle the model falls back to if a particle fails to integrate
@@ -152,7 +151,7 @@ function WaveGrowth1D(; grid::OneDGrid, winds, ODEsys,
         @info "use wind_sea boundary"
     elseif boundary_type == "mininmal"
         @info "use zero boundary"
-        #FetchRelations.get_minimal_windsea(u(0, 0), ODEsets.DT)
+        #FetchRelations.MinimalWindsea(u(0, 0), ODEsets.DT)
         boundary_defaults = copy(ParticleDefaults2D(-11.0, 1e-3, 0.0))
     elseif boundary_type == "same"
         @info "use same default value boundary"
@@ -221,28 +220,28 @@ function reset_boundary!(model::WaveGrowth1D)
 end
 
 
-function Base.show(io::IO, ow::WaveGrowth1D)
+# function Base.show(io::IO, ow::WaveGrowth1D)
 
-    if ow.ODEsystem isa ODESystem
-        sys_print = get_states(ow.ODEsystem)
-    else
-        sys_print = ow.ODEsystem
-    end
+#     if ow.ODEsystem isa ODESystem
+#         sys_print = get_states(ow.ODEsystem)
+#     else
+#         sys_print = ow.ODEsystem
+#     end
 
-    print(io, "WaveGrowth1D ", "\n",
-        "├── grid: ", ow.grid, "\n",
-        "├── layers: ", ow.layers, "\n",
-        "├── clock: ", ow.clock,
-        "├── State: ", size(ow.State), "\n",
-        "├── ParticleCollection size: ", length(ow.ParticleCollection), "\n",
-        "├── ODEs    \n",
-        "|        ├── System: ", sys_print, "\n",
-        "|        ├── Defaults: ", ow.ODEdefaults, "\n",
-        "|        └── Settings:    \n", ow.ODEsettings, "\n",
-        "├── winds ", ow.winds, "\n",
-        "├── currents ", ow.currents, "\n",
-        "└── Perdiodic Boundary ", ow.periodic_boundary, "\n")
-end
+#     print(io, "WaveGrowth1D ", "\n",
+#         "├── grid: ", ow.grid, "\n",
+#         "├── layers: ", ow.layers, "\n",
+#         "├── clock: ", ow.clock,
+#         "├── State: ", size(ow.State), "\n",
+#         "├── ParticleCollection size: ", length(ow.ParticleCollection), "\n",
+#         "├── ODEs    \n",
+#         "|        ├── System: ", sys_print, "\n",
+#         "|        ├── Defaults: ", ow.ODEdefaults, "\n",
+#         "|        └── Settings:    \n", ow.ODEsettings, "\n",
+#         "├── winds ", ow.winds, "\n",
+#         "├── currents ", ow.currents, "\n",
+#         "└── Perdiodic Boundary ", ow.periodic_boundary, "\n")
+# end
 
 
 

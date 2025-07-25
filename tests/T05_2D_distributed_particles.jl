@@ -48,8 +48,8 @@ DT = 30minutes
 r_g0 = 0.85
 
 # function to define constants 
-Const_ID = PW.get_I_D_constant()
-@set Const_ID.γ = 0.88
+
+
 Const_Scg = PW.get_Scg_constants(C_alpha=-1.41, C_varphi=1.81e-5)
 
 
@@ -68,16 +68,16 @@ mesh = TwoDGridMesh(grid, skip=1);
 gn = TwoDGridNotes(grid);
 
 #ProfileView.@profview 
-particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q, input=true, dissipation=true);
-#particle_equations = PW3.particle_equations_vec5(u, v, u, v, γ=0.88, q=Const_ID.q);
+particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q, input=true, dissipation=true);
+#particle_equations = PW3.particle_equations_vec5(u, v, u, v, γ=Const_ID.γ, q=Const_ID.q);
 
 # define V4 parameters absed on Const NamedTuple:
 default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
     C_φ=Const_ID.c_β, C_e=Const_ID.C_e, g=9.81);
 
 # define setting and standard initial conditions
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT);
-#WindSeamin = FetchRelations.get_minimal_windsea(u(0, 0, 0), v(0, 0, 0), DT / 2)
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT);
+#WindSeamin = FetchRelations.MinimalWindsea(u(0, 0, 0), v(0, 0, 0), DT / 2)
 #WindSeamin = FetchRelations.get_initial_windsea(u(0, 0, 0), v(0, 0, 0), DT/5)
 lne_local, cg_u_local, cg_v_local = log(WindSeamin["E"]), WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"]
 

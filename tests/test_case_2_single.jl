@@ -74,7 +74,7 @@ default_ODE_parameters = (r_g = r_g0, C_α = Const_Scg.C_alpha,
 #plt.scalefontsizes(1.75)
 
 # define setting and standard initial conditions
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT );
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT );
 lne_local = log(WindSeamin["E"])
 
 ODE_settings    = PW.ODESettings(

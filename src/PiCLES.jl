@@ -4,7 +4,6 @@ Main module for 'PiCLES.jl'
 module PiCLES
 
 # external modules
-#using ModelingToolkit: Num, @unpack, @register_symbolic, Symbolics, @named, ODESystem
 using HDF5
 using DocStringExtensions
 #using Printf
@@ -24,9 +23,11 @@ export
 
     # grids
     ParticleMesh,
+    Grids,
 
     # utils
     Utils, Debugging, FetchRelations, ParticleTools, WindEmulator, visualization
+
 
     #externals
 
@@ -47,11 +48,13 @@ include("ParticleInCell.jl")
 using .ParticleMesh
 using .ParticleInCell
 
+include("Grids/Grids.jl")
+using .Grids
+
 include("Operators/Operators.jl")
 include("Simulations/Simulations.jl")
 
 #include("Grids/Grids.jl")
-
 
 #include("Particles/Particles.jl")
 

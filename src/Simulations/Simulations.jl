@@ -7,6 +7,9 @@ export run!, reset_simulation!, initialize_simulation!, initialize_wave_sources!
 export convert_store_to_tuple
 
 using ..Architectures: AbstractStore
+
+using SharedArrays
+
 include("simulation.jl")
 include("storing.jl")
 include("run.jl")

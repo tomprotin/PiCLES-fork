@@ -1,10 +1,11 @@
-ENV["JULIA_INCREMENTAL_COMPILE"] = true
+#ENV["JULIA_INCREMENTAL_COMPILE"] = true
+
+using Pkg
+Pkg.activate("PiCLES/")
 
 using Pkg
 Pkg.activate(".")
 
-#using ModelingToolkit, DifferentialEquations
-#using ModelingToolkit#: @register_symbolic
 #using Plots
 import Plots as plt
 using Setfield, IfElse
@@ -48,10 +49,11 @@ DT = 30minutes
 r_g0 = 0.85
 
 # function to define constants 
-Const_ID = PW.get_I_D_constant()
-@set Const_ID.γ = 0.88
-Const_Scg = PW.get_Scg_constants(C_alpha=-1.41, C_varphi=1.81e-5)
 
+
+# Const_Scg = PW.get_Scg_constants(C_alpha=-1.41, C_varphi=1.81e-5)
+
+ODEpars, Const_ID, Const_Scg = PW.ODEParameters(r_g=0.85)
 
 u_func(x, y, t) = U10 #* sin(t / (6 * 60 * 60 * 2π)) * sin(x / 50e3) * sin(y / 50e3)
 v_func(x, y, t) = V10 #* cos(t / (6 * 60 * 60 * 2π)) * sin(x / 50e3) * sin(y / 50e3)
@@ -101,16 +103,16 @@ Revise.retry()
 
 #ProfileView.@profview 
 #ProfileView.@profview 
-particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q, input=true, dissipation=true);
-#particle_equations = PW3.particle_equations_vec5(u, v, u, v, γ=0.88, q=Const_ID.q);
+particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q, input=true, dissipation=true);
+#particle_equations = PW3.particle_equations_vec5(u, v, u, v, γ=Const_ID.γ, q=Const_ID.q);
 
 # define V4 parameters absed on Const NamedTuple:
 default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
     C_φ=Const_ID.c_β, C_e=Const_ID.C_e, g=9.81);
 
 # define setting and standard initial conditions
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT);
-#WindSeamin = FetchRelations.get_minimal_windsea(u(0, 0, 0), v(0, 0, 0), DT / 2)
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT);
+#WindSeamin = FetchRelations.MinimalWindsea(u(0, 0, 0), v(0, 0, 0), DT / 2)
 #WindSeamin = FetchRelations.get_initial_windsea(u(0, 0, 0), v(0, 0, 0), DT/5)
 lne_local = log(WindSeamin["E"])
 cg_u_local = WindSeamin["cg_bar_x"]

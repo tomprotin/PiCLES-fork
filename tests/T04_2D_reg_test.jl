@@ -1,4 +1,8 @@
 #using Plots
+
+using Pkg
+Pkg.activate("PiCLES/")
+
 import Plots as plt
 using Setfield, IfElse
 
@@ -10,7 +14,8 @@ using PiCLES.Operators: TimeSteppers
 using PiCLES.Simulations
 using PiCLES.Operators.TimeSteppers: time_step!, movie_time_step!
 
-using PiCLES.ParticleMesh: TwoDGrid, TwoDGridNotes, TwoDGridMesh
+# using PiCLES.ParticleMesh: TwoDGrid, TwoDGridNotes, TwoDGridMesh
+using PiCLES.Grids.CartesianGrid: TwoDCartesianGridMesh, TwoDCartesianGridStatistics
 using PiCLES.Models.WaveGrowthModels2D
 
 using Oceananigans.TimeSteppers: Clock, tick!
@@ -25,9 +30,6 @@ using PiCLES.Operators.core_2D: GetGroupVelocity, speed
 using PiCLES.Plotting.movie: init_movie_2D_box_plot
 
 
-#sign.(rand(-1:1, 10, 10))
-
-
 # %%
 save_path = "plots/tests/T04_2D_regtest/"
 mkpath(save_path)
@@ -37,18 +39,14 @@ mkpath(save_path)
 # timestep
 DT = 10minutes
 # Characterstic wind velocities and std
-U10, V10 = 10.0, 10.0
+U10, V10 = 5.0, 5.0
 
 # Define basic ODE parameters
-r_g0              = 0.85
-Const_ID = PW.get_I_D_constant()
-@set Const_ID.γ = 0.88
-Const_Scg = PW.get_Scg_constants(C_alpha=- 1.41, C_varphi=1.81e-5)
+
+ODEpars, Const_ID, Const_Scg = PW.ODEParameters(r_g=0.85)
 
 # define grid
-grid = TwoDGrid(10e3, 31, 10e3, 31)
-mesh = TwoDGridMesh(grid, skip=1);
-gn = TwoDGridNotes(grid);
+grid = TwoDCartesianGridMesh(120e3, 31, 120e3, 31)
 
 # example user function
 u_func(x, y, t) = U10 + x * 0 + y * 0 + t * 0
@@ -61,14 +59,14 @@ winds = (u=u, v=v)
 
 
 # define ODE system and parameters
-particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q);
+particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q);
 
-default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
+default_ODE_parameters = (r_g=0.85, C_α=Const_Scg.C_alpha,
     C_φ=Const_ID.c_β, C_e=Const_ID.C_e, g=9.81)
 
 Revise.retry()
 # Default initial conditions based on timestep and chaeracteristic wind velocity
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT )
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT )
 default_particle = ParticleDefaults(WindSeamin["lne"], WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"], 0.0, 0.0)
 
 # ... and ODESettings
@@ -116,11 +114,12 @@ function make_reg_test(wave_model, save_path; plot_name="dummy", N=36)
 
 end
 
+# %%
 Revise.retry()
 
 # loop over U10 and V10 range
-#gridmesh = [(i, j, per) for i in -10:10:10, j in -10:10:10, per in [false, true]]
-gridmesh = [(i, j, per) for i in -10:10:10, j in -10:10:10, per in [false]]
+# gridmesh = [(i, j, per) for i in -10:10:10, j in -10:10:10, per in [false, true]]
+gridmesh = [(i, j, per) for i in -10:10:10, j in -10:10:10, per in [true, false]]
 
 #for I in CartesianIndices(gridmesh)
 for (U10, V10, per) in gridmesh
@@ -135,10 +134,9 @@ for (U10, V10, per) in gridmesh
 
     #winds, u, v  =convert_wind_field_functions(u_func, v_func, x, y, t)
 
-    particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q)
+    particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q)
 
     ## Define wave model
-
     wave_model = WaveGrowthModels2D.WaveGrowth2D(; grid=grid,
         winds=winds,
         ODEsys=particle_system,
@@ -154,7 +152,7 @@ end
 
 
 # %% half domain tests
-gridmesh = [(i, j, per) for i in -10:10:10, j in -10:10:10, per in [false, true]]
+gridmesh = [(i, j, per) for i in -10:10:10, j in -10:10:10, per in [true, false]]
 #for I in CartesianIndices(gridmesh)
 for (U10, V10, per) in gridmesh
     periodic = per == true
@@ -163,15 +161,18 @@ for (U10, V10, per) in gridmesh
     # u_func(x, y, t) = U10 + x * 0 + y * 0 + t * 0 + sign.(rand(-1:1)) .* 0.1
     # v_func(x, y, t) = V10 + x * 0 + y * 0 + t * 0 + sign.(rand(-1:1)) .* 0.1
 
-    u_func(x, y, t) = IfElse.ifelse.(x .< 5e3, U10, sign.(rand(-1:1)) .* 0.1) + y * 0 + t * 0
-    v_func(x, y, t) = (IfElse.ifelse.(x .< 5e3, V10, sign.(rand(-1:1)) .* 0.1) + y * 0) .* cos(t * 3 / (1 * 60 * 60 * 2π))
+    # u_func(x, y, t) = IfElse.ifelse.(x .<60e3, U10, sign.(rand(-1:1)) .* 0.1) + y * 0 + t * 0
+    # v_func(x, y, t) = (IfElse.ifelse.(x .< 60e3, V10, sign.(rand(-1:1)) .* 0.1) + y * 0) .* cos(t * 3 / (1 * 60 * 60 * 2π))
+    u_func(x, y, t) = IfElse.ifelse.(x .< 60e3, U10, 0.0) + y * 0 + t * 0
+    v_func(x, y, t) = (IfElse.ifelse.(x .< 60e3, V10, 0.0) + y * 0) .* cos(t * 3 / (1 * 60 * 60 * 2π))
+
     u(x, y, t) = u_func(x, y, t)
     v(x, y, t) = v_func(x, y, t)
     winds = (u=u, v=v)
 
     #winds, u, v  =convert_wind_field_functions(u_func, v_func, x, y, t)
 
-    particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q)
+    particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q)
 
     ## Define wave model
     wave_model = WaveGrowthModels2D.WaveGrowth2D(; grid=grid,

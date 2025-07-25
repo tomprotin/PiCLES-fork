@@ -5,6 +5,8 @@ using DataFrames
 using ...Architectures: AbstractGrid, AbstractODESettings, AbstractParticleInstance
 using ...custom_structures: MarkedParticleInstance
 
+using ...Operators.core_1D: GetParticleEnergyMomentum
+
 using Plots
 
 function CreateIterationMask(time)
@@ -49,6 +51,31 @@ function ParticleToDataframe(Collection)
         return DD
 end
 
+function FormatParticleData(PI4)
+        statelist = GetParticleEnergyMomentum.(PI4.ODEIntegrator.sol.u)
+
+        statematix = hcat(statelist...)
+        u_matrix = hcat(PI4.ODEIntegrator.sol.u...)
+
+        if (length(PI4.ODEIntegrator.sol.u[1]) == 3)
+                AA = (x=u_matrix[3, :],
+                        time=PI4.ODEIntegrator.sol.t,
+                        cgx=u_matrix[2, :],
+                        E=statematix[1, :],
+                        mx=statematix[2, :])
+        else
+                AA = (x=u_matrix[4, :],
+                        y=u_matrix[5, :],
+                        time=PI4.ODEIntegrator.sol.t,
+                        cgx=u_matrix[2, :],
+                        cgy=u_matrix[3, :],
+                        E=statematix[1, :],
+                        mx=statematix[2, :],
+                        my=statematix[3, :])
+        end
+        return AA
+end
+
 
 function ParticleStatsToDataframe(Collection)
         df = DataFrame()
@@ -57,6 +84,17 @@ function ParticleStatsToDataframe(Collection)
         df[!, "boundary"] = [PF.Particle.boundary for PF in Collection]
         df[!, "time"] = [PF.time for PF in Collection]
         df[!, "errorReturnCode"] = [PF.errorReturnCode for PF in Collection]
+        return df
+end
+
+function ParticleStatsToDataframe_simple(Collection)
+        df = DataFrame()
+        df[!, "position_ij"] = [ PF.position_ij for PF in Collection][:]
+        df[!, "position_xy"] = [PF.position_xy for PF in Collection][:]
+        df[!, "boundary"] = [PF.boundary for PF in Collection][:]
+        df[!, "time"] = [PF.ODEIntegrator.t for PF in Collection][:]
+        df[!, "u"] = [PF.ODEIntegrator.u for PF in Collection][:]
+        # df[!, "errorReturnCode"] = [PF.errorReturnCode for PF in Collection]
         return df
 end
 

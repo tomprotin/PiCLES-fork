@@ -45,8 +45,8 @@ dt_ODE_save = 10 # 3 min
 
 r_g0 = 0.85
 # function to define constants for grouwth and dissipation
-Const_ID = PW.get_I_D_constant()
-#@set Const_ID.γ = 0.88
+
+#
 Const_Scg = PW.get_Scg_constants()
 
 
@@ -86,7 +86,7 @@ particle_system = PW.particle_rays()
 default_ODE_parameters = (r_g =r_g0, C_α = Const_Scg.C_alpha, C_e = Const_ID.C_e)
 
 
-WindSeamin = FetchRelations.get_minimal_windsea(U10, DT)
+WindSeamin = FetchRelations.MinimalWindsea(U10, DT)
 particle_defaults = ParticleDefaults(log(WindSeamin["E"]), WindSeamin["cg_bar"], 0.0)
 #particle_defaults = ParticleDefaults(log(FetchRelations.Eⱼ(5.0, DT)), 1e-4, 0.0)
 
@@ -201,7 +201,7 @@ savefig(joinpath(plot_path_base, "test1_negative.png"))
 ##### avection to the left #########
 
 # Default values for particle
-WindSeamin = FetchRelations.get_minimal_windsea(-U10, DT)
+WindSeamin = FetchRelations.MinimalWindsea(-U10, DT)
 particle_defaults = ParticleDefaults(log(WindSeamin["E"]), WindSeamin["cg_bar"], 0.0)
 
 #particle_defaults = ParticleDefaults(log((hs / 4)^2), 0.001, 0.0)

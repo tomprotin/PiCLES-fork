@@ -40,7 +40,7 @@ U10, V10 = 10.0, 10.0
 # Define basic ODE parameters
 r_g0 = 0.85
 Const_ID = PW4.get_I_D_constant()
-@set Const_ID.γ = 0.88
+
 Const_Scg = PW4.get_Scg_constants(C_alpha=-1.41, C_varphi=1.81e-5)
 
 
@@ -61,7 +61,7 @@ winds = (u=u, v=v)
 
 # define ODE system and parameters
 Revise.retry()
-particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q);
+particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q);
  
 
 default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
@@ -70,7 +70,7 @@ default_ODE_parameters = (r_g=r_g0, C_α=Const_Scg.C_alpha,
 
 Revise.retry()
 # Default initial conditions based on timestep and chaeracteristic wind velocity
-WindSeamin = FetchRelations.get_minimal_windsea(U10, V10, DT)
+WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
 default_particle = ParticleDefaults(WindSeamin["lne"], WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"], 0.0, 0.0)
 
 # ... and ODESettings
@@ -119,7 +119,7 @@ winds = (u=u, v=v)
 
 #winds, u, v  =convert_wind_field_functions(u_func, v_func, x, y, t)
 Revise.retry()
-particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q)
+particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q)
 
 
 
@@ -213,98 +213,3 @@ PW4.sin2_a_min_b( 0,1  , 0,0 )
 
 
 PW4.αₚ(0,0,0,0)
-
-# @btime PW4.α_func(1,1)
-# @btime PW4.α_func(0,1)
-# @btime PW4.α_func(1,0)
-# @btime PW4.α_func(0,0)
-
-
-# isnan(PW4.α_func(40,0.1)) 
-# PW4.α_func(0, 10)
-# # %%
-
-# @show c_g_conversions2(0.1)
-# @show c_g_conversions2(0)
-# @show c_g_conversions2(-0.1)
-
-
-a
-# %%
-
-# gridmesh = [(i, j) for i in [-10,10], j in 0:5:5]
-# #for I in CartesianIndices(gridmesh)
-# for (U10, V10) in gridmesh
-#     @show U10, V10
-
-#     x0 =50e3
-#     Lx = (gn.Nx - 1) * gn.dx
-#     u_func(x, y, t) = IfElse.ifelse.(x .< x0, U10, U10 * (1 -x/Lx) ) + y * 0 + t * 0 + 0.1
-#     v_func(x, y, t) = IfElse.ifelse.(x .< x0, V10, V10 * (1 -x/Lx) ) + y * 0 + t * 0 + 0.1
-
-#     # u_func(x, y, t) = IfElse.ifelse.(x .< x0, x*0+ 0.1, U10 * (x - x0) / (Lx-x0)) + y * 0 + t * 0
-#     # v_func(x, y, t) = IfElse.ifelse.(x .< x0, x*0+ 0.1, V10 * (x - x0) / (Lx-x0)) + y * 0 + t * 0
-
-#     u(x, y, t) = u_func(x, y, t)
-#     v(x, y, t) = v_func(x, y, t)
-#     winds = (u=u, v=v)
-
-#     #winds, u, v  =convert_wind_field_functions(u_func, v_func, x, y, t)
-
-#     particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q)
-
-
-#     ## Define wave model
-#     wave_model = WaveGrowthModels2D.WaveGrowth2D(; grid=grid,
-#         winds=winds,
-#         ODEsys=particle_system,
-#         ODEvars=vars,
-#         ODEsets=ODE_settings,  # ODE_settings
-#         ODEdefaults=default_particle,  # default_ODE_parameters
-#         minimal_particle=FetchRelations.MinimalParticle(U10, V10, DT), #
-#         periodic_boundary=false,
-#         boundary_type="wind_sea",#"zero",#"wind_sea", #"wind_sea", # or "default"
-#         movie=true)
-
-#     make_reg_test(wave_model, save_path, plot_name="T02_2D_decaying_U" * string(U10) * "_V" * string(V10), N=60, axline=x0/1e3)
-# end
-
-
-# # %%
-# Revise.retry()
-# gridmesh = [(i, j) for i in [-10,0, 10], j in 0:5:5]
-# #for I in CartesianIndices(gridmesh)
-# for (U10, V10) in gridmesh
-#     @show U10, V10
-
-#     x0 =130e3
-#     Lx = (gn.Nx - 1) * gn.dx
-#     u_func(x, y, t) = IfElse.ifelse.(x .< x0, U10, -U10 ) + y * 0 + t * 0 + 0.1
-#     v_func(x, y, t) = IfElse.ifelse.(x .< x0, V10, -V10 ) + y * 0 + t * 0 + 0.1
-
-#     # u_func(x, y, t) = IfElse.ifelse.(x .< x0, x*0+ 0.1, U10 * (x - x0) / (Lx-x0)) + y * 0 + t * 0
-#     # v_func(x, y, t) = IfElse.ifelse.(x .< x0, x*0+ 0.1, V10 * (x - x0) / (Lx-x0)) + y * 0 + t * 0
-#     u(x, y, t) = u_func(x, y, t)
-#     v(x, y, t) = v_func(x, y, t)
-#     winds = (u=u, v=v)
-
-#     #winds, u, v  =convert_wind_field_functions(u_func, v_func, x, y, t)
-
-#     particle_system = PW.particle_equations(u, v, γ=0.88, q=Const_ID.q)
-
-
-#     ## Define wave model
-#     wave_model = WaveGrowthModels2D.WaveGrowth2D(; grid=grid,
-#         winds=winds,
-#         ODEsys=particle_system,
-#         ODEvars=vars,
-#         ODEsets=ODE_settings,  # ODE_settings
-#         ODEdefaults=default_particle,  # default_ODE_parameters
-#         minimal_particle=FetchRelations.MinimalParticle(U10, V10, DT), #
-#         periodic_boundary=false,
-#         boundary_type="wind_sea",#"zero",#"wind_sea", #"wind_sea", # or "default"
-#         movie=true)
-
-#     make_reg_test(wave_model, save_path, plot_name="T02_2D_divergence_U" * string(U10) * "_V" * string(V10), N=60, axline=x0/1e3)
-# end
-

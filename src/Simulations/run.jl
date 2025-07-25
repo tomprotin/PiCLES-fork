@@ -14,6 +14,8 @@ using ..Operators.mapping_1D
 using ..Operators.mapping_2D
 using Statistics
 
+using StructArrays
+
 import Plots as plt
 
 using DataFrames, CSV
@@ -164,7 +166,11 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
         while sim.running
 
                 #reset State
-                sim.model.State .= 0.0
+                if isa(sim.model.State, SharedArray)
+                        sim.model.State[:,:,:] .= 0.0
+                else
+                        sim.model.State .= 0.0
+                end
                 # do time step
 
                 #launch new batch of particles from cyclic launch
@@ -231,7 +237,7 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                         sim.store.iteration += 1
                         if sim.verbose
                                 @info "write state to store..."
-                                #print("mean energy", mean(sim.store.store["data"][:, :, 1], dims=2), "\n")
+                                #@info "max energy ", maximum(sim.model.State[:,:,1])
                         end
 
                 end
@@ -241,7 +247,7 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                         sim.store.iteration += 1
                         if sim.verbose
                                 @info "write state to cash store..."
-                                print("mean energy ", mean_of_state(sim.model), "\n")
+                                #print("mean energy ", mean_of_state(sim.model), "\n")
                         end
 
                 end
@@ -332,6 +338,7 @@ function reset_simulation!(sim::Simulation)# where {PP<:Union{ParticleDefaults,N
 end
 
 
+# depreciate, just used for 1D version
 """
 SeedParticle_mapper(f, p, s, b1, b2, b3, c1, c2, c3, c4, d1, d2 ) = x -> f( p, s, x, b1, b2, b3, c1, c2, c3, c4, d1, d2 )
 maps to SeedParticle! function
@@ -367,19 +374,25 @@ function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::
                 gridnotes, model.winds, model.ODEsettings.timestep,
                 model.boundary, model.periodic_boundary)
 
-        # ThreadsX.map(SeedParticle_i, [(i, j) for i in 1:model.grid.Nx, j in 1:model.grid.Ny])
-        map(SeedParticle_i, [(i, j) for i in 1:model.grid.Nx, j in 1:model.grid.Ny])
+                #end, CartesianIndices(model.grid.data)
 
-        # print(defaults)
-        #ParticleCollection=[]
-        # for i in 1:model.grid.Nx, j in 1:model.grid.Ny
-        #         SeedParticle2D!(ParticleCollection, model.State,
-        #                         (i, j),
-        #                         model.ODEsystem, defaults , model.ODEsettings,
-        #                         gridnotes, model.winds, model.ODEsettings.timestep,
-        #                         model.boundary, model.periodic_boundary  )
+
+        # threads for loop version
+        # ParticleCollection = StructArray{ParticleInstance2D}(undef, grid.stats.Nx, grid.stats.Ny)
+
+        # speed tests
+        # 1 thread  8.736 ms (124253 allocations: 12.39 MiB)
+        # 4 thread   4.443 ms (123316 allocations: 12.35 MiB)
+        # @btime @threads for ij in CartesianIndices(mesh)
+        #         ParticleCollection4[ij] = SeedParticle(
+                                # model.State, ij,
+                                # model.ODEsystem, defaults, model.ODEsettings,
+                                # model.grid.stats, ij_mesh, ij_wind,
+                                # model.DT,
+                                # model.boundary, model.periodic_boundary)
         # end
-
+        @info typeof(ParticleCollection)
+        # @info ParticleCollection
         model.ParticleCollection = ParticleCollection
 
         if defaults isa ParticleDefaults
