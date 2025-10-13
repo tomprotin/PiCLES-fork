@@ -62,6 +62,7 @@ mutable struct GeometricalOptics{Grid<:AbstractGrid,
                         plt_path,
                         sve_part,
                         nPart,
+                        DA,
                         wnds,
                         cur,
                         Mstat} <: Abstract2DModel where {Mstat<:Union{Nothing,stat}, PCollection<:Union{Vector,Array}}
@@ -99,6 +100,8 @@ mutable struct GeometricalOptics{Grid<:AbstractGrid,
     save_particles::sve_part        # Whether or not to save particle data
 
     n_particles_launch::nPart       # Number of particles to launch from each node when using a nonparametric spreading type
+
+    data_assimilation::DA           # Data to be assimilated at a given time step
 
     winds::wnds     # u, v, if needed u_x, u_y
     currents::cur      # u, v, currents
@@ -163,6 +166,7 @@ function GeometricalOptics(; grid::TwoDGrid,
     plot_savepath="",
     save_particles=false,
     n_particles_launch=150,
+    data_assimilation=[],
     CBsets=nothing,
     movie=false) where {PP<:Union{ParticleDefaults2D,String}}
 
@@ -294,6 +298,7 @@ function GeometricalOptics(; grid::TwoDGrid,
         plot_savepath,
         save_particles,
         n_particles_launch,
+        data_assimilation,
         winds,
         currents,
         Mstat)
