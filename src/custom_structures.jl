@@ -1,12 +1,12 @@
 module custom_structures
 
-export ParticleInstance1D, ParticleInstance2D, MarkedParticleInstance, AbstractParticleInstance, AbstractMarkedParticleInstance, wni
+export ParticleInstance1D, ParticleInstance2D, MarkedParticleInstance, AbstractParticleInstance, AbstractMarkedParticleInstance, wni, DensityObservation
 
 using DifferentialEquations: OrdinaryDiffEq.ODEIntegrator
 using DocStringExtensions
 using StaticArrays
 
-using ..Architectures: AbstractParticleInstance, AbstractMarkedParticleInstance
+using ..Architectures: AbstractParticleInstance, AbstractMarkedParticleInstance, AbstractObservation
 using ..Architectures: AbstractBoundary
 
 # ParticleInstance is the Stucture that carries each particle.
@@ -24,6 +24,14 @@ mutable struct ParticleInstance1D <: AbstractParticleInstance
         ODEIntegrator::ODEIntegrator
         boundary::Bool
         on::Bool
+end
+
+mutable struct DensityObservation <: AbstractObservation
+        position_ij::Tuple{Int, Int}
+        position_xy::Tuple{Float64, Float64}
+        density::Function
+        on::Bool
+        time::Float64
 end
 
 # Debugging ParticleInstance
