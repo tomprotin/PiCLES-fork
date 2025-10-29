@@ -45,8 +45,10 @@ using .FetchRelations
 
 include("ParticleMesh.jl")
 include("ParticleInCell.jl")
+include("DataAssimilation.jl")
 using .ParticleMesh
 using .ParticleInCell
+using .DataAssimilation
 
 include("Grids/Grids.jl")
 using .Grids

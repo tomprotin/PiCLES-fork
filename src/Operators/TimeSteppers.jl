@@ -2,6 +2,7 @@ module TimeSteppers
 
 export time_step!
 using ...Architectures
+using ...DataAssimilation
 using ..mapping_1D
 using ..mapping_2D
 
@@ -307,6 +308,8 @@ function time_step!(model::Abstract2DModel, Δt::Float64; callbacks=nothing, deb
             model.ParticleCollection[end-k+1].ODEIntegrator.u[6] = spreading
             #push!(model.ParticleCollection,InitParticleInstance(model.ODEsystem, z_init, model.ODEsettings, (i,j), false, true))
         end
+
+        assimilate!(model)
 
         #@info nPreviousParticles
         #@info length(model.ParticleCollection)
