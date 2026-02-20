@@ -20,6 +20,14 @@ using ..core_2D_spread: Get_u_FromShared as StochasticGet_u_FromShared
 using ..core_2D_spread: ResetParticleValues as StochasticResetParticleValues
 using ..core_2D_spread: ParticleDefaults as StochasticParticleDefaults
 using ..core_2D_spread: InitParticleInstance as StochasticInitParticleInstance
+
+using ..core_2D_parametric: GetParticleEnergyMomentum as GetParticleEnergyMomentumParam
+using ..core_2D_parametric: GetVariablesAtVertex as GetVariablesAtVertexParam
+using ..core_2D_parametric: Get_u_FromShared as Get_u_FromSharedParam
+using ..core_2D_parametric: ResetParticleValues as ResetParticleValuesParam
+using ..core_2D_parametric: ParticleDefaults as ParticleDefaultsParam
+using ..core_2D_parametric: InitParticleInstance as InitParticleInstanceParam
+
 using ..core_2D: GetParticleEnergyMomentum, GetVariablesAtVertex, ParticleDefaults, InitParticleInstance, Get_u_FromShared, ResetParticleValues
 
 using ...Architectures: AbstractParticleInstance, AbstractStochasticParticleInstance, AbstractMarkedParticleInstance, AbstractODESettings, StateTypeL1, Abstract2DModel, Abstract2DStochasticModel

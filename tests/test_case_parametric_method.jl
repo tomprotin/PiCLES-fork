@@ -1,9 +1,10 @@
+ENV["JULIA_INCREMENTAL_COMPILE"]=true
 using Pkg
 # This will be replaced by the module load in the future
 Pkg.activate(".")  # Activate the PiCLES package 
 
 using PiCLES
-using PiCLES.Operators.core_2D: ParticleDefaults
+using PiCLES.Operators.core_2D_parametric: ParticleDefaultsParam 
 using PiCLES.Models.WaveGrowthModels2D: WaveGrowth2D
 using PiCLES.Simulations
 using PiCLES.Grids.CartesianGrid: TwoDCartesianGridMesh, ProjetionKernel, TwoDCartesianGridStatistics
@@ -38,7 +39,7 @@ end
 
 function u(x, y, t)
   if t <= 300hour
-    dist = distance(x, y, 75e3/2, 30e3) # distance from the center of the wind blob
+    dist = distance(x, y, 75e3, 15e3) # distance from the center of the wind blob
     if dist <= 5e3
       return U10
     else
@@ -52,7 +53,7 @@ v(x, y, t) = V10 * 0#(sin(pi*x/50e3))
 winds = (u=v, v=u)
 
 # Define grid
-grid = TwoDCartesianGridMesh(75e3, 76, 200e3, 201)
+grid = TwoDCartesianGridMesh(150e3, 151, 200e3, 201)
 # grid = Grids.SphericalGrid.TwoDSphericalGridMesh(0.0, 180.0, 91, 0, 80.0, 61; periodic_boundary=(true, false))
 
 
@@ -66,7 +67,8 @@ particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q);
 WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
 
 # Define default particle
-default_particle = ParticleDefaults(WindSeamin["lne"], WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"], 0.0, 0.0)
+initCovarianceMatrix = [1.0 0.0 0.0 0.0; 0.0 1.0 0.0 0.0; 0.0 0.0 1.0 0.0; 0.0 0.0 0.0 1.0]
+default_particle = ParticleDefaultsParam(WindSeamin["lne"], WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"], 0.0, 0.0, initCovarianceMatrix)
 
 # Define ODE settings
 ODE_settings = PW.ODESettings(
@@ -91,7 +93,7 @@ wave_model = WaveGrowth2D(; grid=grid,
     movie=true)
 
 # Build simulation
-wave_simulation = Simulation(wave_model, Δt=DT, verbose = false, stop_time=24hour)#1hours)
+wave_simulation = Simulation(wave_model, Δt=DT, verbose = true, stop_time=24hour)#1hours)
 
 # Run simulation
 run!(wave_simulation, cash_store=true)
@@ -100,34 +102,34 @@ run!(wave_simulation, cash_store=true)
 fstate = wave_simulation.store.store[end];
 p1 = plt.heatmap(grid.data.x[:,1] / 1e3, grid.data.y[1,:] / 1e3, fstate[:, :, 1])
 
-function plot_particle_collection(state_i, grid)
-    # particles = wave_model.ParticleCollection
-    p = plt.plot(layout=(3, 2), size=(1200, 1000))
-    # heatmap!(p, transpose(particles.on), subplot=1, title="on | iter=" * string(wave_model.clock.iteration) * " | time=" * string(wave_model.clock.time))
-    # heatmap!(p, transpose(particles.boundary), subplot=2, title="boundary")
+# function plot_particle_collection(state_i, grid)
+#     # particles = wave_model.ParticleCollection
+#     p = plt.plot(layout=(3, 2), size=(1200, 1000))
+#     # heatmap!(p, transpose(particles.on), subplot=1, title="on | iter=" * string(wave_model.clock.iteration) * " | time=" * string(wave_model.clock.time))
+#     # heatmap!(p, transpose(particles.boundary), subplot=2, title="boundary")
 
-    sE = state_i[:, :, 1]
-    sE[grid.data.mask.==0] .= NaN
-    sE[grid.data.mask.==2] .= NaN
-    plt.heatmap!(p, transpose(sE), subplot=3, title="State: Energy", clims=(0, NaN))
+#     sE = state_i[:, :, 1]
+#     sE[grid.data.mask.==0] .= NaN
+#     sE[grid.data.mask.==2] .= NaN
+#     plt.heatmap!(p, transpose(sE), subplot=3, title="State: Energy", clims=(0, NaN))
 
-    sm1 = state_i[:, :, 2]
-    sm1[grid.data.mask.==0] .= NaN
-    sm1[grid.data.mask.==2] .= NaN
-    plt.heatmap!(p, transpose(sm1), subplot=4, title="State: x momentum ", clims=(0, NaN))
+#     sm1 = state_i[:, :, 2]
+#     sm1[grid.data.mask.==0] .= NaN
+#     sm1[grid.data.mask.==2] .= NaN
+#     plt.heatmap!(p, transpose(sm1), subplot=4, title="State: x momentum ", clims=(0, NaN))
 
-    sm2 = state_i[:, :, 3]
-    sm2[grid.data.mask.==0] .= NaN
-    sm2[grid.data.mask.==2] .= NaN
-    plt.heatmap!(p, transpose(sm2), subplot=6, title="State: y momentum ")
-    # title = plot!(title="Plot title", grid=false, showaxis=false, bottom_margin=-50Plots.px)
-    display(p)
-    return p
-end
+#     sm2 = state_i[:, :, 3]
+#     sm2[grid.data.mask.==0] .= NaN
+#     sm2[grid.data.mask.==2] .= NaN
+#     plt.heatmap!(p, transpose(sm2), subplot=6, title="State: y momentum ")
+#     # title = plot!(title="Plot title", grid=false, showaxis=false, bottom_margin=-50Plots.px)
+#     display(p)
+#     return p
+# end
 
 
-  fstate = wave_simulation.store.store[end];
-  plot_particle_collection(fstate, wave_simulation.model.grid)
+  # fstate = wave_simulation.store.store[end];
+  # plot_particle_collection(fstate, wave_simulation.model.grid)
 
 
 for i in 1:length(wave_simulation.store.store)
@@ -135,7 +137,7 @@ for i in 1:length(wave_simulation.store.store)
   # plot_particle_collection(fstate, wave_simulation.model.grid)
   # sm2 = wave_model.State[:, :, 3]
   energy = get_tot_energy_domain(fstate)
-  p1 = plt.heatmap(grid.data.x[:,1], grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=(700, 1080))
+  p1 = plt.heatmap(grid.data.x[:,1], grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=(860, 1080))
   # p1 = plt.heatmap(p, transpose(sm2), subplot=6, title="State: y momentum ")
 
   plt.plot!(legend=:none,
