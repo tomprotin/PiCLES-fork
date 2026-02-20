@@ -1,10 +1,13 @@
 using ..Operators.core_2D_spread: SeedParticle as StochasticSeedParticle2D
+using ..Operators.core_2D_spread: SeedParticle! as StochasticSeedParticle2D!
+using ..Operators.core_2D_parametric: SeedParticle as ParametricSeedParticle2D
 using ..Operators.core_2D: SeedParticle as SeedParticle2D
-using ..Operators.core_2D_spread: ParticleDefaults as ParticleDefaults2D
+using ..Operators.core_2D: ParticleDefaults as ParticleDefaults2D
+using ..Operators.core_2D_spread: ParticleDefaults as StochasticParticleDefaults2D
+using ..Operators.core_2D_parametric: ParticleDefaults as ParametricParticleDefaults2D
 using ..Operators.core_1D: ParticleDefaults as ParticleDefaults1D
 
 using ..Operators.core_1D: SeedParticle! as SeedParticle1D!
-using ..Operators.core_2D_spread: SeedParticle! as SeedParticle2D!
 # using ..Operators.core_2D: SeedParticle 
 
 using ..Architectures: Abstract2DModel, Abstract1DModel, Abstract2DStochasticModel
@@ -247,8 +250,8 @@ initialize_simulation!(sim::Simulation)
 initialize the simulation sim by calling init_particles! to initialize the model.ParticleCollection.
 -particle_initials::T=nothing  was removed from arguments
 """
-function initialize_simulation!(sim::Simulation)# where {PP<:Union{ParticleDefaults2D,Nothing}}
-        # copy(ParticleDefaults2D(log(4e-8), 1e-2, 0.0)))
+function initialize_simulation!(sim::Simulation)# where {PP<:Union{StochasticParticleDefaults2D,Nothing}}
+        # copy(StochasticParticleDefaults2D(log(4e-8), 1e-2, 0.0)))
 
         if sim.verbose
                 @info "init particles..."
@@ -271,7 +274,7 @@ reset_simulation!(sim::Simulation)
 reset the simulation sim by calling init_particles! to reinitialize the model.ParticleCollection, sets the model.clock.time, model.clock.iteration, and model.state to 0.
 - particle_initials::Dict{Num, Float64} was removed from arguments
 """
-function reset_simulation!(sim::Simulation)# where {PP<:Union{ParticleDefaults2D,Nothing}}
+function reset_simulation!(sim::Simulation)# where {PP<:Union{StochasticParticleDefaults2D,Nothing}}
 
         sim.running = false
         sim.run_wall_time = 0.0
@@ -316,7 +319,7 @@ initialize the model.ParticleCollection based on the model.grid and the defaults
 If defaults is nothing, then the model.ODEdev is used.
 usually the initilization uses wind constitions to seed the particles.
 """
-function init_particles!(model::Abstract2DStochasticModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,ParticleDefaults2D,Array{Any,1},Nothing}}
+function init_particles!(model::Abstract2DStochasticModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,StochasticParticleDefaults2D,Array{Any,1},Nothing}}
         #defaults        = isnothing(defaults) ? model.ODEdev : defaults
         if verbose
                 @info "seed PiCLES ... \n"
@@ -339,7 +342,7 @@ function init_particles!(model::Abstract2DStochasticModel; defaults::PP=nothing,
         ParticleCollection = []
         model.ParticleCollection = ParticleCollection
 
-        if defaults isa ParticleDefaults2D
+        if defaults isa StochasticParticleDefaults2D
                 i = Int64(floor((defaults.x - model.grid.stats.xmin) / model.grid.stats.dx)) + 1
                 j = Int64(floor((defaults.y - model.grid.stats.ymin) / model.grid.stats.dy)) + 1
                 # gridnotes = TwoDGridNotes(model.grid)
@@ -415,7 +418,7 @@ function init_particles!(model::Abstract2DStochasticModel; defaults::PP=nothing,
         nothing
 end
 
-function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,ParticleDefaults2D,Nothing}}
+function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,StochasticParticleDefaults2D,Nothing}}
         #defaults        = isnothing(defaults) ? model.ODEdev : defaults
         if verbose
                 @info "seed PiCLES ... \n"
@@ -482,7 +485,7 @@ initialize the model.ParticleCollection based on the model.grid and the defaults
 If defaults is nothing, then the model.ODEdev is used.
 usually the initilization uses wind constitions to seed the particles.
 """
-function init_particles!(model::Abstract1DModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,ParticleDefaults2D,Nothing}}
+function init_particles!(model::Abstract1DModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,StochasticParticleDefaults2D,Nothing}}
         #defaults        = isnothing(defaults) ? model.ODEdev : defaults
         if verbose
                 @info "seed PiCLES ... \n"

@@ -52,7 +52,7 @@ mutable struct ParticleDefaultsParam{T<:AbstractFloat}
         cov_xk::Matrix{T}
 end
 
-ParticleDefaultsParam(vec::Vector{Float64}) = ParticleDefaultsParam(vec[1], vec[2], vec[3], vec[4], vec[5], [1.0 0.0; 0.0 1.0])
+ParticleDefaultsParam(vec::Vector{Float64}) = ParticleDefaultsParam(vec[1], vec[2], vec[3], vec[4], vec[5], [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
 
 Base.copy(s::ParticleDefaultsParam) = ParticleDefaultsParam(s.lne, s.c̄_x, s.c̄_y, s.x, s.y, s.cov_xk)
 #initParticleDefaults(s::ParticleDefaultsParam) = MVector{5,Float64}([s.lne, s.c̄_x, s.c̄_y, s.x, s.y])
@@ -289,7 +289,7 @@ function InitParticleValues(
                 end        
                 
                 # initialize particle instance based on above devfined values
-                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3] ,  xx, yy)
+                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3] ,  xx, yy, [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
         else
                 particle_defaults = defaults
                 particle_on = true
@@ -342,7 +342,7 @@ function ResetParticleValues(
                 # particle_defaults = defaults
                 # particle_defaults[4] = xy[1]
                 # particle_defaults[5] = xy[2]
-                particle_defaults = ParticleDefaultsParam(defaults.lne, defaults.c̄_x, defaults.c̄_y, xy[1], xy[2])
+                particle_defaults = ParticleDefaultsParam(defaults.lne, defaults.c̄_x, defaults.c̄_y, xy[1], xy[2], [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
         end
 
         #@show defaults
