@@ -5,7 +5,7 @@ Pkg.activate(".")  # Activate the PiCLES package
 
 using PiCLES
 using PiCLES.Operators.core_2D_parametric: ParticleDefaultsParam 
-using PiCLES.Models.WaveGrowthModels2D: WaveGrowth2D
+using PiCLES.Models.ParametricModels: Parametric2D
 using PiCLES.Simulations
 using PiCLES.Grids.CartesianGrid: TwoDCartesianGridMesh, ProjetionKernel, TwoDCartesianGridStatistics
 
@@ -83,7 +83,7 @@ ODE_settings = PW.ODESettings(
   force_dtmin=true)
 
 # Build wave model
-wave_model = WaveGrowth2D(; grid=grid,
+wave_model = Parametric2D(; grid=grid,
     winds=winds,
     ODEsys=particle_system,
     ODEsets=ODE_settings,

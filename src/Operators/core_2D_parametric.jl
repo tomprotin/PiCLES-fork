@@ -342,7 +342,7 @@ function ResetParticleValues(
                 # particle_defaults = defaults
                 # particle_defaults[4] = xy[1]
                 # particle_defaults[5] = xy[2]
-                particle_defaults = ParticleDefaultsParam(defaults.lne, defaults.c̄_x, defaults.c̄_y, xy[1], xy[2], [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
+                particle_defaults = ParticleDefaultsParam(defaults.lne, defaults.c̄_x, defaults.c̄_y, xy[1], xy[2], defaults.cov_xk)
         end
 
         #@show defaults

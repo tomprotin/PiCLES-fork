@@ -9,7 +9,7 @@ using ...Architectures
 #using core_1D: MarkedParticleInstance
 using ...ParticleMesh: OneDGrid, OneDGridNotes, TwoDGrid, TwoDGridNotes
 
-using ...Operators.core_2D: ParticleDefaults as ParticleDefaults2D
+using ...Operators.core_2D_parametric: ParticleDefaultsParam as ParticleDefaults2D
 using ...Operators.mapping_2D
 
 using SharedArrays
@@ -225,7 +225,7 @@ function Parametric2D(; grid::GG,
     elseif ODEinit_type == "wind_sea"
         ODEdefaults = nothing
     elseif ODEinit_type == "mininmal"
-        ODEdefaults = ParticleDefaults2D(-11.0, 1e-3, 0.0)
+        ODEdefaults = ParticleDefaults2D(-11.0, 1e-3, 1e-3, 0.0, 0.0)
     else
         error("ODEinit_type must be either 'wind_sea','mininmal', or ParticleDefaults2D instance ")
     end
@@ -321,7 +321,7 @@ function Parametric2D(; grid::GG,
     end
 
     # return Parametric2D structure
-    return ParametricModel(
+    return Parametric2D(
         grid,
         layers,
         nothing,
