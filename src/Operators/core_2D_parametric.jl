@@ -21,7 +21,7 @@ using ...Architectures: AbstractGridStatistics
 # using ..particle_waves_v3: init_vars
 # t, x, y, c̄_x, c̄_y, lne, Δn, Δφ_p, r_g, C_α, C_φ, g, C_e = init_vars()
 
-using ...custom_structures: ParticleInstance1D, ParticleInstance2D, MarkedParticleInstance
+using ...custom_structures: ParticleInstance1D, ParametricParticleInstance2D, MarkedParticleInstance
 
 export init_z0_to_State!
 include("initialize.jl")
@@ -29,6 +29,14 @@ include("initialize.jl")
 # Callbacks
 export wrap_pos!, periodic_BD_single_PI!, show_pos!, periodic_condition_x
 include("utils.jl")
+
+function fold(v::Vector{Float64})
+        return [v[1] v[2] v[4] v[6]; v[2] v[3] v[5] v[7]; v[4] v[5] v[8] v[9]; v[6] v[7] v[9] v[10]]
+end
+
+function unfold(M::Matrix{Float64})
+        return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
+end
 
 ### particle defaults ###
 """
@@ -72,7 +80,7 @@ function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVec
 
         if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
                 ui_lne, ui_c̄_x, ui_c̄_y, _, _, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
-                ui_M = [ui_xx ui_xy ui_xkx ui_xky; ui_xy ui_yy ui_ykx ui_yky; ui_xkx ui_xky ui_kxkx ui_kxky; ui_xky ui_yky ui_kxky ui_kyky]
+                ui_M = fold([ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky])
         elseif z0 isa ParticleDefaultsParam
                 ui_lne, ui_c̄_x, ui_c̄_y, _, _, ui_M = z0.lne, z0.c̄_x, z0.c̄_y, z0.x, z0.y, z0.cov_xk
         else
@@ -85,7 +93,7 @@ function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVec
         m_y = ui_c̄_y * ui_e / c_speed^2 / 2
         m_Mxk = ui_M * ui_e / c_speed^2 / 2
 
-        return SVector{4,Float64}(ui_e, m_x, m_y, m_Mxk)
+        return SVector{13,Float64}(ui_e, m_x, m_y, unfold(m_Mxk)...)
 end
 
 
@@ -130,7 +138,8 @@ x, y: coordinates of the vertex
 
 """
 function GetVariablesAtVertex(i_State::TT, x::Float64, y::Float64) where {TT<:Union{Vector{Float64},MVector{4,Float64}}}
-    e, m_x, m_y, m_Mxk = i_State
+    e, m_x, m_y, m_Mxk... = i_State
+    m_Mxk = fold(m_Mxk)
     m_amp = speed(m_x, m_y)
     c_x = m_x * e / (2 * m_amp^2)
     c_y = m_y * e / (2 * m_amp^2)
@@ -203,7 +212,7 @@ function InitParticleInstance(model, z_initials, ODE_settings, ij, xy , boundary
                 callback=ODE_settings.callbacks,
                 save_everystep=ODE_settings.save_everystep)
 
-        return ParticleInstance2D(ij, (xy[1], xy[2]), integrator, boundary_flag, particle_on)
+        return ParametricParticleInstance2D(ij, (xy[1], xy[2]), integrator, boundary_flag, particle_on)
 end
 
 # deprechiated because of MTK
@@ -322,7 +331,7 @@ function ResetParticleValues(
         wind_tuple,
         DT, vector=true) where {PP<:Union{Nothing,ParticleDefaultsParam,Vector{Float64}}}
 
-        if defaults == nothing # this is boundary_defaults = "wind_sea"
+        if isnothing(defaults) # this is boundary_defaults = "wind_sea"
                 #@info "init particles from fetch relations: $z_i"
                 #particle_defaults = Dict{Num,Float64}()
                 #xx, yy = PI.position_xy[1], PI.position_xy[2]
@@ -332,7 +341,7 @@ function ResetParticleValues(
 
                 ui = FetchRelations.get_initial_windsea(u_init, v_init, DT, particle_state=true)
                 # seed particle given fetch relations
-                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3], xy[1], xy[2])
+                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3], xy[1], xy[2], [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
 
         elseif typeof(defaults) == Vector{Float64} # this is for the case of minimal wind sea
                 particle_defaults = defaults
@@ -466,7 +475,7 @@ function SeedParticle(
         # 1st check if particle is not in mask, Land points == 0
         if ij_mesh.mask == 0 # land point
                 # init dummy instance
-                return ParticleInstance2D(ij, xy , nothing, false, false)
+                return ParametricParticleInstance2D(ij, xy , nothing, false, false)
         end
 
         # define initial condition

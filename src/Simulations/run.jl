@@ -10,7 +10,7 @@ using ..Operators.core_1D: ParticleDefaults as ParticleDefaults1D
 using ..Operators.core_1D: SeedParticle! as SeedParticle1D!
 # using ..Operators.core_2D: SeedParticle 
 
-using ..Architectures: Abstract2DModel, Abstract1DModel, Abstract2DStochasticModel
+using ..Architectures: Abstract2DModel, Abstract1DModel, Abstract2DStochasticModel, Abstract2DParametricModel
 using ..ParticleMesh: OneDGrid, OneDGridNotes, TwoDGrid, TwoDGridNotes
 
 #using WaveGrowthModels: init_particles!
@@ -468,6 +468,54 @@ function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::
         nothing
 end
 
+function init_particles!(model::Abstract2DParametricModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,StochasticParticleDefaults2D,Nothing}}
+        #defaults        = isnothing(defaults) ? model.ODEdev : defaults
+        if verbose
+                @info "seed PiCLES ... \n"
+                @info "defaults is $(defaults)"
+                if defaults isa Dict
+                        @info "found particle initials, just replace position "
+                else
+                        @info "no particle defaults found, use windsea to seed particles"
+                end
+        end
+
+        ParticleCollection = StructArray(map(ij -> begin
+
+                        ij_mesh = model.grid.data[ij]
+                        ij_wind = (     model.winds.u(ij_mesh.x, ij_mesh.y, 0.0), 
+                                        model.winds.v(ij_mesh.x, ij_mesh.y, 0.0)
+                                        )
+
+                        ParametricSeedParticle2D(
+                                model.State, ij,
+                                model.ODEsystem, defaults, model.ODEsettings,
+                                model.grid.stats, model.grid.ProjetionKernel, model.grid.PropagationCorrection,
+                                ij_mesh, ij_wind,
+                                model.ODEsettings.timestep,
+                                model.boundary, model.periodic_boundary)
+
+                end, CartesianIndices(model.grid.data)))
+
+        # threads for loop version
+        # ParticleCollection = StructArray{ParticleInstance2D}(undef, grid.stats.Nx, grid.stats.Ny)
+
+        # speed tests
+        # 1 thread  8.736 ms (124253 allocations: 12.39 MiB)
+        # 4 thread   4.443 ms (123316 allocations: 12.35 MiB)
+        # @btime @threads for ij in CartesianIndices(mesh)
+        #         ParticleCollection4[ij] = SeedParticle(
+                                # model.State, ij,
+                                # model.ODEsystem, defaults, model.ODEsettings,
+                                # model.grid.stats, ij_mesh, ij_wind,
+                                # model.DT,
+                                # model.boundary, model.periodic_boundary)
+        # end
+        @info typeof(ParticleCollection)
+        # @info ParticleCollection
+        model.ParticleCollection = ParticleCollection
+        nothing
+end
 
 
 ### 1D version ###

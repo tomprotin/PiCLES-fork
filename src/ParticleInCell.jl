@@ -370,7 +370,7 @@ function push_to_grid!(grid::StateTypeL1,
                             index_pos::II,
                             weights::WW,
                             Nx::AbstractBoundary, 
-                            Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},MVector{3,AbstractFloat}},
+                            Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},SVector{13,Float64},MVector{3,AbstractFloat}},
                                                             II<:Union{Tuple{Int,Int},SVector{2,Int64}},
                                                             WW<:Union{Tuple{Float64,Float64},SVector{2,Float16}}}
 
@@ -584,7 +584,7 @@ wrapper over FieldVector weight&index (wni),
 function push_to_grid!(grid::StateTypeL1,
     charge::CC,
     wni::FieldVector,
-    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64}}}
+    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},SVector{13,Float64}}}
     #@info "this is version D"
     for (i, w) in construct_loop(wni)
         push_to_grid!(grid, charge, i, w, Nx, Ny)

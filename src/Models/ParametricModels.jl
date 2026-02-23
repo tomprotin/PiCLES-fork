@@ -22,7 +22,7 @@ import Oceananigans: fields
 using Oceananigans.TimeSteppers: Clock
 using ...FetchRelations
 
-using ...custom_structures: ParticleInstance2D
+using ...custom_structures: ParametricParticleInstance2D
 
 using ...Grids: make_boundary_lists
 #includet("mapping_1D.jl")
@@ -209,7 +209,7 @@ function Parametric2D(; grid::GG,
 
     # initialize state {SharedArray} given grid and layers
     # Number of state variables 
-    Nstate = 3
+    Nstate = 13
     State = init_StateArray(grid, Nstate, layers)
 
     # depriciated for new Grid logic
@@ -303,7 +303,7 @@ function Parametric2D(; grid::GG,
 
 
     # ParticleCollection = []
-    ParticleCollection = StructArray{ParticleInstance2D}(undef, Nx, Ny)
+    ParticleCollection = StructArray{ParametricParticleInstance2D}(undef, Nx, Ny)
     FailedCollection = Vector{AbstractMarkedParticleInstance}([])
     # particle initialization is  not done in the init_particle! method
     # for i in range(1,length = grid.Nx)

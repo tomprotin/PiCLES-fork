@@ -9,14 +9,14 @@ using PiCLES.Models.ParametricModels: Parametric2D
 using PiCLES.Simulations
 using PiCLES.Grids.CartesianGrid: TwoDCartesianGridMesh, ProjetionKernel, TwoDCartesianGridStatistics
 
-using PiCLES.ParticleSystems: particle_waves_v5 as PW
+using PiCLES.ParticleSystems: particle_waves_v7 as PW
 using Oceananigans.Units
 
 # just for simple plotting
 import Plots as plt
 
 # Parameters
-U10, V10 = 20.0, 20.0
+U10, V10 = 10.0, 10.0
 DT = 10minutes
 r_g0 = 0.85 # ratio of c / c_g (phase velocity/ group velocity).
 
@@ -37,7 +37,20 @@ function get_tot_energy_domain(fstate)
         return sum(fstate[:,:,1])
 end
 
-function u(x, y, t)
+function u_line(x, y, t)
+  if t <= 300hour
+    dist = abs(x - 75e3) # distance from the center of the wind blob
+    if dist <= 5e3
+      return U10
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
+function u_sphere(x, y, t)
   if t <= 300hour
     dist = distance(x, y, 75e3, 15e3) # distance from the center of the wind blob
     if dist <= 5e3
@@ -49,8 +62,8 @@ function u(x, y, t)
     return 0.0
   end
 end
-v(x, y, t) = V10 * 0#(sin(pi*x/50e3))
-winds = (u=v, v=u)
+v(x, y, t) = V10 * 0.0001#(sin(pi*x/50e3))
+winds = (u=v, v=u_line)
 
 # Define grid
 grid = TwoDCartesianGridMesh(150e3, 151, 200e3, 201)
@@ -61,7 +74,7 @@ grid = TwoDCartesianGridMesh(150e3, 151, 200e3, 201)
 ODEpars, Const_ID, Const_Scg = PW.ODEParameters(r_g=r_g0)
 
 # Define particle equations
-particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q);
+particle_system = PW.particle_equations(u_line, v, γ=Const_ID.γ, q=Const_ID.q);
 
 # Calculate minimal wind sea based on characteristic winds
 WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
@@ -139,11 +152,22 @@ for i in 1:length(wave_simulation.store.store)
   energy = get_tot_energy_domain(fstate)
   p1 = plt.heatmap(grid.data.x[:,1], grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=(860, 1080))
   # p1 = plt.heatmap(p, transpose(sm2), subplot=6, title="State: y momentum ")
+  moment_amp= sqrt.(fstate[:,:,2].^2 + fstate[:,:,3].^2)
+  c_x = fstate[:,:,2] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
+  c_y = fstate[:,:,3] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
+  for i in 1:wave_model.grid.stats.Nx.N, j in 1:wave_model.grid.stats.Ny.N
+    if isnan(c_x[i,j])
+      c_x[i,j] = 0.0
+    end
+    if isnan(c_y[i,j])
+      c_y[i,j] = 0.0
+    end
+  end
+  max_speed = round(maximum(sqrt.(c_x.^2 + c_y.^2)), digits=4)
+  max_speed_position = argmax(sqrt.(c_x.^2 + c_y.^2))
 
   plt.plot!(legend=:none,
-                title="total energy = "*string(round(energy,digits=3))*"; max = "*string(round(maximum(fstate[:,:,1]),
-                        digits=3))*"; pos = ("*string(argmax(fstate[:,:,1])[1])*","*
-                        string(argmax(fstate[:,:,1])[2])*")",
+                title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(max_speed_position[1])*","*string(max_speed_position[2])*")",
                 ylabel="y position",
                 xlabel="x position",
                 xlims=(wave_simulation.model.grid.stats.xmin, wave_simulation.model.grid.stats.xmax),
