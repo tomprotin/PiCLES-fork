@@ -402,6 +402,43 @@ function push_to_grid!(grid::StateTypeL1,
     nothing
 end
 
+function push_to_grid!(grid::StateTypeL1,
+                            charge::CC,
+                            index_pos::II,
+                            weights::WW,
+                            Nx::AbstractBoundary, 
+                            Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},SVector{13,Float64},MVector{3,AbstractFloat},Tuple{Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vararg{Matrix{Float64}, 4}}},
+                                                            II<:Union{Tuple{Int,Int},SVector{2,Int64}},
+                                                            WW<:Union{Tuple{Float64,Float64},SVector{2,Float16}}}
+
+    # conditions where nothing should be returned
+    if  (Nx isa N_NonPeriodic) & ~test_domain(index_pos[1], Nx.N) | # non-periodic in x and y-position is out of domain
+        (Ny isa N_NonPeriodic) & ~test_domain(index_pos[2], Ny.N) | # non-periodic in y and y-position is out of domain
+        (Ny isa N_TripolarNorth) & (index_pos[2] < 1) # tripolar north and y-position is below south pole
+        # @info index_pos, " particle is not in domain, or at TripolarGrid SouthPole"
+        return
+
+    elseif (Ny isa N_TripolarNorth) & (index_pos[2] > Ny.N)  # Tripolar North boundary
+
+        # @info index_pos, " particle is in domain, TripolarGrid make boundary condition"
+        try
+            index_pos, charge = TripolarNorthBoundary(index_pos, charge, Nx, Ny)
+        catch e
+            @error e, index_pos, charge, Nx, Ny
+            return
+        end
+        grid[index_pos[1], index_pos[2], :] += weights[1] * weights[2] * charge
+
+    else # all other boundaries
+
+        # @info index_pos, " particle is in domain, wrap if needed"
+        #@info wrap_index!(PI.position_ij[1], G.stats.Nx), wrap_index!(PI.position_ij[2], G.stats.Ny)
+        grid[wrap_index!(index_pos[1], Nx), wrap_index!(index_pos[2], Ny), :] += weights[1] * weights[2] * charge
+
+    end
+    nothing
+end
+
 
 # old version
 # ## MVector and SharedVector version
@@ -576,6 +613,13 @@ function push_to_grid!(grid::StateTypeL1,
     end
 end
 
+function fold(v::Vector{Float64})
+        return [v[1] v[2] v[4] v[6]; v[2] v[3] v[5] v[7]; v[4] v[5] v[8] v[9]; v[6] v[7] v[9] v[10]]
+end
+
+function unfold(M::Matrix{Float64})
+        return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
+end
 
 """
 wrapper over FieldVector weight&index (wni), 
@@ -591,6 +635,18 @@ function push_to_grid!(grid::StateTypeL1,
     end
 end
 
+function push_to_grid!(grid::StateTypeL1,
+    charge::CC,
+    wni::FieldVector,
+    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},SVector{13,Float64},Tuple{Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vararg{Matrix{Float64}, 4}}}}
+    #@info "this is version D"
+    j = 1
+    for (i, w) in construct_loop(wni)
+        current_charge = [charge[1], charge[1+j]..., unfold(charge[5+j])...]
+        push_to_grid!(grid, current_charge, i, w, Nx, Ny)
+        j += 1
+    end
+end
 
 
 ###### 1D versions ####

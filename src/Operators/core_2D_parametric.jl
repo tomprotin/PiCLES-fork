@@ -8,7 +8,7 @@ using StaticArrays
 using DocStringExtensions
 
 # Particle-Node interaction
-export GetParticleEnergyMomentum, GetVariablesAtVertex, Get_u_FromShared, ParticleDefaultsParam, InitParticleInstance
+export GetParticleEnergyMomentum,GetParticleEnergyMomentumSwell, GetVariablesAtVertex, Get_u_FromShared, ParticleDefaultsParam, InitParticleInstance
 export InitParticleValues
 
 #include("../Utils/FetchRelations.jl")
@@ -80,9 +80,8 @@ function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVec
 
         if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
                 ui_lne, ui_c̄_x, ui_c̄_y, _, _, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
-                ui_M = fold([ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky])
         elseif z0 isa ParticleDefaultsParam
-                ui_lne, ui_c̄_x, ui_c̄_y, _, _, ui_M = z0.lne, z0.c̄_x, z0.c̄_y, z0.x, z0.y, z0.cov_xk
+                ui_lne, ui_c̄_x, ui_c̄_y, _, _, _ = z0.lne, z0.c̄_x, z0.c̄_y, z0.x, z0.y, z0.cov_xk
         else
                 error("input should be either Vector{Float64}, MVector{15,Float64} or ParticleDefaultsParam")
         end
@@ -91,9 +90,88 @@ function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVec
         c_speed = speed(ui_c̄_x, ui_c̄_y)
         m_x = ui_c̄_x * ui_e / c_speed^2 / 2
         m_y = ui_c̄_y * ui_e / c_speed^2 / 2
+
+        ui_M = [(sqrt(2)*c_speed/4)^2 0 0 0;
+                0 (sqrt(2)*c_speed/4)^2 0 0;            # TO BE CHANGED
+                0 0 1 0;
+                0 0 0 1
+        ]
         m_Mxk = ui_M * ui_e / c_speed^2 / 2
 
         return SVector{13,Float64}(ui_e, m_x, m_y, unfold(m_Mxk)...)
+end
+
+function local_mean_speed_gaussian_2D(X, X0, cov)
+        res = X0[1:2] + cov[1:2, 3:4] * inv(cov[3:4, 3:4]) * (X - X0)
+        return res
+end
+
+function local_cov_speed_gaussian_2D(X, X0, cov)
+        res = cov[1:2, 1:2] - cov[1:2, 3:4] * inv(cov[3:4, 3:4]) * cov[3:4, 1:2]
+        return res
+end
+
+function GetParticleEnergyMomentumSwell(z0::TT) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
+
+        if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
+                ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
+                ui_M = fold([ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky])
+        elseif z0 isa ParticleDefaultsParam
+                ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_M = z0.lne, z0.c̄_x, z0.c̄_y, z0.x, z0.y, z0.cov_xk
+        else
+                error("input should be either Vector{Float64}, MVector{15,Float64} or ParticleDefaultsParam")
+        end
+
+        x = x - floor(x)
+        y = y - floor(y)
+
+        ui_c_1 = local_mean_speed_gaussian_2D([x, y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_c_2 = local_mean_speed_gaussian_2D([1-x, y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_c_3 = local_mean_speed_gaussian_2D([x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_c_4 = local_mean_speed_gaussian_2D([1-x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
+
+        ui_e = exp(ui_lne)
+        c_speed = speed(ui_c̄_x, ui_c̄_y)
+        m_x1 = ui_c_1[1] * ui_e / c_speed^2 / 2
+        m_x2 = ui_c_2[1] * ui_e / c_speed^2 / 2
+        m_x3 = ui_c_3[1] * ui_e / c_speed^2 / 2
+        m_x4 = ui_c_4[1] * ui_e / c_speed^2 / 2
+        m_y1 = ui_c_1[2] * ui_e / c_speed^2 / 2
+        m_y2 = ui_c_2[2] * ui_e / c_speed^2 / 2
+        m_y3 = ui_c_3[2] * ui_e / c_speed^2 / 2
+        m_y4 = ui_c_4[2] * ui_e / c_speed^2 / 2
+
+
+        ui_M_C1 = local_cov_speed_gaussian_2D([x, y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_M_C2 = local_cov_speed_gaussian_2D([1-x, y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_M_C3 = local_cov_speed_gaussian_2D([x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_M_C4 = local_cov_speed_gaussian_2D([1-x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
+        final_ui_M1 = [ui_M_C1[1,1] ui_M_C1[1,2] 0 0;
+                      ui_M_C1[2,1] ui_M_C1[2,2] 0 0;
+                      0 0 1 0;
+                      0 0 0 1
+        ]
+        final_ui_M2 = [ui_M_C2[1,1] ui_M_C2[1,2] 0 0;
+                      ui_M_C2[2,1] ui_M_C2[2,2] 0 0;
+                      0 0 1 0;
+                      0 0 0 1
+        ]
+        final_ui_M3 = [ui_M_C3[1,1] ui_M_C3[1,2] 0 0;
+                      ui_M_C3[2,1] ui_M_C3[2,2] 0 0;
+                      0 0 1 0;
+                      0 0 0 1
+        ]
+        final_ui_M4 = [ui_M_C4[1,1] ui_M_C4[1,2] 0 0;
+                      ui_M_C4[2,1] ui_M_C4[2,2] 0 0;
+                      0 0 1 0;
+                      0 0 0 1
+        ]
+        m_Mxk1 = final_ui_M1 * ui_e / c_speed^2 / 2
+        m_Mxk2 = final_ui_M2 * ui_e / c_speed^2 / 2
+        m_Mxk3 = final_ui_M3 * ui_e / c_speed^2 / 2
+        m_Mxk4 = final_ui_M4 * ui_e / c_speed^2 / 2
+
+        return ui_e, [m_x1, m_y1], [m_x2, m_y2], [m_x3, m_y3], [m_x4, m_y4], m_Mxk1, m_Mxk2, m_Mxk3, m_Mxk4
 end
 
 

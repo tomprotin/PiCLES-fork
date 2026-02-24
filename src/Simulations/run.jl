@@ -208,7 +208,7 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                         push_state_to_storage!(sim)
                         sim.store.iteration += 1
                         if sim.verbose
-                                @info string(sim.model.clock.iteration) * " iterations, time = " * string(Int64(round(sim.model.clock.time/3600))) * "h"* string(Int64(round((sim.model.clock.time%3600)/60)))
+                                @info string(sim.model.clock.iteration) * " iterations, time = " * string(Int64(floor(sim.model.clock.time/3600))) * "h"* string(Int64(floor((sim.model.clock.time/60)%60)))
                                 # @info "write state to store..."
                                 #@info "max energy ", maximum(sim.model.State[:,:,1])
                         end
@@ -219,7 +219,7 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                         push!(sim.store.store, copy(sim.model.State))
                         sim.store.iteration += 1
                         if sim.verbose
-                                @info string(sim.model.clock.iteration) * " iterations, time = " * string(Int64(round(sim.model.clock.time/3600))) * "h"* string(Int64(round((sim.model.clock.time%3600)/60)))
+                                @info string(sim.model.clock.iteration) * " iterations, time = " * string(Int64(floor(sim.model.clock.time/3600))) * "h"* string(Int64(floor((sim.model.clock.time/60)%60)))
                                 # @info "write state to cash store..."
                                 #print("mean energy ", mean_of_state(sim.model), "\n")
                         end

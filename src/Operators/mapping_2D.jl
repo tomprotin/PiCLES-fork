@@ -21,7 +21,8 @@ using ..core_2D_spread: ResetParticleValues as StochasticResetParticleValues
 using ..core_2D_spread: ParticleDefaults as StochasticParticleDefaults
 using ..core_2D_spread: InitParticleInstance as StochasticInitParticleInstance
 
-using ..core_2D_parametric: GetParticleEnergyMomentum as GetParticleEnergyMomentumParam
+using ..core_2D_parametric: GetParticleEnergyMomentum as GetParticleEnergyMomentumWindSeaParam
+using ..core_2D_parametric: GetParticleEnergyMomentumSwell as GetParticleEnergyMomentumSwellParam
 using ..core_2D_parametric: GetVariablesAtVertex as GetVariablesAtVertexParam
 using ..core_2D_parametric: Get_u_FromShared as Get_u_FromSharedParam
 using ..core_2D_parametric: ResetParticleValues as ResetParticleValuesParam
@@ -84,19 +85,33 @@ function ParticleToNode!(PI::AbstractParticleInstance, S::StateTypeL1, G::TwoDGr
         nothing
 end
 
-function ParticleToNode!(PI::AbstractParametricParticleInstance, S::StateTypeL1, G::MeshGrids, periodic_boundary::Bool)
+function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{Float64}, S::StateTypeL1, G::MeshGrids, periodic_boundary::Bool)
+        
+        wind_speed = sqrt(winds[1]^2 + winds[2]^2)
+        particle_speed = sqrt(PI.ODEIntegrator.u[2]^2 + PI.ODEIntegrator.u[3]^2)
+        if particle_speed/wind_speed < 0.8      # TEMPORARY, THIS NEEDS TO CHANGE !!!!!!!
+                #u[4], u[5] are the x and y positions of the particle. For the CartesianGrid2D these are cooridnates relative to the particle node
+                weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
 
-        #u[4], u[5] are the x and y positions of the particle. For the CartesianGrid2D these are cooridnates relative to the particle node
-        weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
+                #ui[1:2] .= PI.position_xy
 
-        #ui[1:2] .= PI.position_xy
+                u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u)
+                #@show u_state
 
-        u_state = GetParticleEnergyMomentumParam(PI.ODEIntegrator.u)
-        #@show u_state
+                #PIC.push_to_grid!(S, u_state , index_positions,  weights, G.stats.Nx.N, G.stats.Ny.N , periodic_boundary)
+                PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
+                nothing
+        else
+                weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
 
-        #PIC.push_to_grid!(S, u_state , index_positions,  weights, G.stats.Nx.N, G.stats.Ny.N , periodic_boundary)
-        PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
-        nothing
+                #ui[1:2] .= PI.position_xy
+
+                u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u)
+                #@show u_state
+
+                #PIC.push_to_grid!(S, u_state , index_positions,  weights, G.stats.Nx.N, G.stats.Ny.N , periodic_boundary)
+                PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
+        end
 end
 
 function ParticleToNode!(PI::AbstractParticleInstance, S::StateTypeL1, G::MeshGrids, periodic_boundary::Bool)
@@ -319,6 +334,14 @@ function advance!(PI::AbstractStochasticParticleInstance,
         #return PI
 end
 
+function fold(v::Vector{Float64})
+        return [v[1] v[2] v[4] v[6]; v[2] v[3] v[5] v[7]; v[4] v[5] v[8] v[9]; v[6] v[7] v[9] v[10]]
+end
+
+function unfold(M::Matrix{Float64})
+        return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
+end
+
 function advance!(PI::AbstractParametricParticleInstance,
                         S::StateTypeL1,
                         Failed::Vector{AbstractMarkedParticleInstance},
@@ -439,7 +462,8 @@ function advance!(PI::AbstractParametricParticleInstance,
 
         #if PI.ODEIntegrator.u[1] > -13.0 #ODEs.log_energy_minimum # the minimum enerçy is distributed to 4 neighbouring particles
         if PI.on 
-                ParticleToNode!(PI, S, Grid, periodic_boundary)
+                wind = [winds.u(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t), winds.v(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t)]
+                ParticleToNode!(PI, wind, S, Grid, periodic_boundary)
         end
 
         #return PI
