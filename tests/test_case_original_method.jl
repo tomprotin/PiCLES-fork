@@ -15,7 +15,7 @@ using Oceananigans.Units
 import Plots as plt
 
 # Parameters
-U10, V10 = 20.0, 10.0
+U10, V10 = 10.0, 10.0
 DT = 10minutes
 r_g0 = 0.85 # ratio of c / c_g (phase velocity/ group velocity).
 
@@ -36,6 +36,47 @@ function get_tot_energy_domain(fstate)
         return sum(fstate[:,:,1])
 end
 
+angle1 = pi/4
+function u_stopped_angled_line(x, y, t)
+  if x==0.
+    angle2 = pi/2
+  else
+    angle2 = atan(y/x)
+  end
+  dist = sqrt(x^2+y^2)
+  opposite = cos(angle1 - angle2) * dist
+  adjacent = abs(sin(angle1 - angle2)) * dist
+  if opposite <= 125e3
+    if adjacent <= 5e3
+      return U10 * cos(angle1)
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
+function v_stopped_angled_line(x, y, t)
+  if x==0.
+    angle2 = pi/2
+  else
+    angle2 = atan(y/x)
+  end
+  dist = sqrt(x^2+y^2)
+  opposite = cos(angle1 - angle2) * dist
+  adjacent = abs(sin(angle1 - angle2)) * dist
+  if opposite <= 125e3
+    if adjacent <= 5e3
+      return U10 * sin(angle1)
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
 function u(x, y, t)
   if t <= 300hour
     dist = distance(x, y, 75e3, 15e3) # distance from the center of the wind blob
@@ -49,10 +90,13 @@ function u(x, y, t)
   end
 end
 v(x, y, t) = V10 * 0#(sin(pi*x/50e3))
-winds = (u=v, v=u)
+
+used_u = u_stopped_angled_line
+used_v = v_stopped_angled_line
+winds = (u=used_u, v=used_v)
 
 # Define grid
-grid = TwoDCartesianGridMesh(150e3, 151, 200e3, 201)
+grid = TwoDCartesianGridMesh(600e3, 151, 600e3, 151)
 # grid = Grids.SphericalGrid.TwoDSphericalGridMesh(0.0, 180.0, 91, 0, 80.0, 61; periodic_boundary=(true, false))
 
 
@@ -60,7 +104,7 @@ grid = TwoDCartesianGridMesh(150e3, 151, 200e3, 201)
 ODEpars, Const_ID, Const_Scg = PW.ODEParameters(r_g=r_g0)
 
 # Define particle equations
-particle_system = PW.particle_equations(u, v, γ=Const_ID.γ, q=Const_ID.q);
+particle_system = PW.particle_equations(used_u, used_v, γ=Const_ID.γ, q=Const_ID.q);
 
 # Calculate minimal wind sea based on characteristic winds
 WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
@@ -91,62 +135,53 @@ wave_model = WaveGrowth2D(; grid=grid,
     movie=true)
 
 # Build simulation
-wave_simulation = Simulation(wave_model, Δt=DT, stop_time=24hour)#1hours)
+wave_simulation = Simulation(wave_model, Δt=DT, stop_time=72hour)#1hours)
 
 # Run simulation
 run!(wave_simulation, cash_store=true)
 
-# Plot final state
-fstate = wave_simulation.store.store[end];
-p1 = plt.heatmap(grid.data.x[:,1] / 1e3, grid.data.y[1,:] / 1e3, fstate[:, :, 1])
+frame_size = (1220, 1080)
 
-# function plot_particle_collection(state_i, grid)
-#     # particles = wave_model.ParticleCollection
-#     p = plt.plot(layout=(3, 2), size=(1200, 1000))
-#     # heatmap!(p, transpose(particles.on), subplot=1, title="on | iter=" * string(wave_model.clock.iteration) * " | time=" * string(wave_model.clock.time))
-#     # heatmap!(p, transpose(particles.boundary), subplot=2, title="boundary")
-
-#     sE = state_i[:, :, 1]
-#     sE[grid.data.mask.==0] .= NaN
-#     sE[grid.data.mask.==2] .= NaN
-#     plt.heatmap!(p, transpose(sE), subplot=3, title="State: Energy", clims=(0, NaN))
-
-#     sm1 = state_i[:, :, 2]
-#     sm1[grid.data.mask.==0] .= NaN
-#     sm1[grid.data.mask.==2] .= NaN
-#     plt.heatmap!(p, transpose(sm1), subplot=4, title="State: x momentum ", clims=(0, NaN))
-
-#     sm2 = state_i[:, :, 3]
-#     sm2[grid.data.mask.==0] .= NaN
-#     sm2[grid.data.mask.==2] .= NaN
-#     plt.heatmap!(p, transpose(sm2), subplot=6, title="State: y momentum ")
-#     # title = plot!(title="Plot title", grid=false, showaxis=false, bottom_margin=-50Plots.px)
-#     display(p)
-#     return p
-# end
-
-
-#   fstate = wave_simulation.store.store[end];
-#   plot_particle_collection(fstate, wave_simulation.model.grid)
-
-
+max_speeds =  zeros(length(wave_simulation.store.store))
+max_energy = maximum([wave_simulation.store.store[i][j,k,1] for i in 1:length(wave_simulation.store.store) for j in 1:wave_model.grid.stats.Nx.N for k in 1:wave_model.grid.stats.Ny.N])
 for i in 1:length(wave_simulation.store.store)
   fstate = wave_simulation.store.store[i];
   # plot_particle_collection(fstate, wave_simulation.model.grid)
   # sm2 = wave_model.State[:, :, 3]
   energy = get_tot_energy_domain(fstate)
-  p1 = plt.heatmap(grid.data.x[:,1], grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=(860, 1080))
+  p1 = plt.heatmap(grid.data.x[:,1], grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=frame_size)
   # p1 = plt.heatmap(p, transpose(sm2), subplot=6, title="State: y momentum ")
-  max_speed = maximum(sqrt.(fstate[:,:,2].^2 + fstate[:,:,3].^2))
+  moment_amp= sqrt.(fstate[:,:,2].^2 + fstate[:,:,3].^2)
+  c_x = fstate[:,:,2] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
+  c_y = fstate[:,:,3] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
+  for k in 1:wave_model.grid.stats.Nx.N, l in 1:wave_model.grid.stats.Ny.N
+    if isnan(c_x[k,l])
+      c_x[k,l] = 0.0
+    end
+    if isnan(c_y[k,l])
+      c_y[k,l] = 0.0
+    end
+  end
 
+  max_speed = round(maximum((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2))), digits=4)
+  max_speed_position = argmax((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2)))
+  max_speeds[i] = max_speed
   plt.plot!(legend=:none,
-                title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(argmax(fstate[:,:,1])[1])*","*
-                        string(argmax(fstate[:,:,1])[2])*")",
+                title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(max_speed_position[1])*","*string(max_speed_position[2])*")",
                 ylabel="y position",
                 xlabel="x position",
                 xlims=(wave_simulation.model.grid.stats.xmin, wave_simulation.model.grid.stats.xmax),
-                ylims=(wave_simulation.model.grid.stats.ymin, wave_simulation.model.grid.stats.ymax))
+                ylims=(wave_simulation.model.grid.stats.ymin, wave_simulation.model.grid.stats.ymax)
+                ,clim=(0.0,max_energy*0.5)
+  )
+
+  pos_x = wave_simulation.model.grid.stats.xmin + (max_speed_position[1] - 1) * wave_simulation.model.grid.stats.dx
+  pos_y = wave_simulation.model.grid.stats.ymin + (max_speed_position[2] - 1) * wave_simulation.model.grid.stats.dy
+  plt.scatter!([pos_x], [pos_y], color=:red, markersize=5)
 
   plt.savefig(p1, "plots/test_case_original/"*string(i)*".png")
   
 end
+
+plt.plot(1:length(max_speeds), max_speeds, title="Max speed over time", xlabel="Time step", ylabel="Max speed (m/s)", size=(860, 1080))
+plt.savefig("plots/test_case_original/max_speeds_over_time.png")

@@ -460,7 +460,21 @@ function time_step!_advance(model::Abstract2DModel, Δt::Float64, FailedCollecti
                                 model.ODEsettings.log_energy_maximum,
                                 model.ODEsettings.wind_min_squared,
                                 model.periodic_boundary,
-                                model.ODEdefaults)
+                                model.ODEdefaults, model.ODEsettings.log_energy_minimum)
+    end
+
+end
+
+function time_step!_advance(model::Abstract2DParametricModel, Δt::Float64, FailedCollection::Vector{AbstractMarkedParticleInstance})
+
+    @threads for a_particle in model.ParticleCollection[model.ocean_points]
+        #@info a_particle.position_ij
+        mapping_2D.advance!(    a_particle, model.State, FailedCollection,
+                                model.grid, model.winds, Δt,
+                                model.ODEsettings.log_energy_maximum,
+                                model.ODEsettings.wind_min_squared,
+                                model.periodic_boundary,
+                                model.ODEdefaults, model.ODEsettings.log_energy_minimum)
     end
 
 end
@@ -507,7 +521,7 @@ function movie_time_step!(model::Abstract2DModel, Δt; callbacks=nothing, debug=
             model.ODEsettings.log_energy_maximum,
             model.ODEsettings.wind_min_squared,
             model.periodic_boundary,
-            model.ODEdefaults)
+            model.ODEdefaults, model.ODEsettings.log_energy_minimum)
 
     end
 

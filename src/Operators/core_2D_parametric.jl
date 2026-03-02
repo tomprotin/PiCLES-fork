@@ -60,12 +60,12 @@ mutable struct ParticleDefaultsParam{T<:AbstractFloat}
         cov_xk::Matrix{T}
 end
 
-ParticleDefaultsParam(vec::Vector{Float64}) = ParticleDefaultsParam(vec[1], vec[2], vec[3], vec[4], vec[5], [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
+ParticleDefaultsParam(vec::Vector{Float64}) = ParticleDefaultsParam(vec[1], vec[2], vec[3], vec[4], vec[5], fold(vec[6:end]))
 
 Base.copy(s::ParticleDefaultsParam) = ParticleDefaultsParam(s.lne, s.c̄_x, s.c̄_y, s.x, s.y, s.cov_xk)
 #initParticleDefaults(s::ParticleDefaultsParam) = MVector{5,Float64}([s.lne, s.c̄_x, s.c̄_y, s.x, s.y])
 #initParticleDefaults(s::ParticleDefaultsParam) = MVector{5,Float64}(s.lne, s.c̄_x, s.c̄_y, s.x, s.y)
-initParticleDefaults(s::ParticleDefaultsParam) = [s.lne, s.c̄_x, s.c̄_y, s.x, s.y, s.cov_xk[1,1], s.cov_xk[1,2], s.cov_xk[2,2],s.cov_xk[1,3], s.cov_xk[2,3], s.cov_xk[1,4], s.cov_xk[2,4], s.cov_xk[3,3], s.cov_xk[3,4], s.cov_xk[4,4]]
+initParticleDefaults(s::ParticleDefaultsParam) = [s.lne, s.c̄_x, s.c̄_y, s.x, s.y, unfold(s.cov_xk)...]
 
 
 
@@ -76,7 +76,7 @@ initParticleDefaults(s::ParticleDefaultsParam) = [s.lne, s.c̄_x, s.c̄_y, s.x, 
 GetParticleEnergyMomentum(PI)
 
 """
-function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
+function GetParticleEnergyMomentum(z0::TT, mesh_size::Vector{Float64}) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
 
         if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
                 ui_lne, ui_c̄_x, ui_c̄_y, _, _, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
@@ -91,10 +91,10 @@ function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVec
         m_x = ui_c̄_x * ui_e / c_speed^2 / 2
         m_y = ui_c̄_y * ui_e / c_speed^2 / 2
 
-        ui_M = [(sqrt(2)*c_speed/4)^2 0 0 0;
-                0 (sqrt(2)*c_speed/4)^2 0 0;            # TO BE CHANGED
-                0 0 1 0;
-                0 0 0 1
+        ui_M = [(1/sqrt(2)*c_speed/2)^2 0 0 0;
+                0 (1/sqrt(2)*c_speed/2)^2 0 0;            # TO BE CHANGED
+                0 0 mesh_size[1]^2 0;
+                0 0 0 mesh_size[2]^2
         ]
         m_Mxk = ui_M * ui_e / c_speed^2 / 2
 
@@ -102,7 +102,7 @@ function GetParticleEnergyMomentum(z0::TT) where {TT<:Union{Vector{Float64},MVec
 end
 
 function local_mean_speed_gaussian_2D(X, X0, cov)
-        res = X0[1:2] + cov[1:2, 3:4] * inv(cov[3:4, 3:4]) * (X - X0)
+        res = X0[1:2] + cov[1:2, 3:4] * inv(cov[3:4, 3:4]) * (X - X0[3:4])
         return res
 end
 
@@ -111,7 +111,7 @@ function local_cov_speed_gaussian_2D(X, X0, cov)
         return res
 end
 
-function GetParticleEnergyMomentumSwell(z0::TT) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
+function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
 
         if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
                 ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
@@ -122,13 +122,15 @@ function GetParticleEnergyMomentumSwell(z0::TT) where {TT<:Union{Vector{Float64}
                 error("input should be either Vector{Float64}, MVector{15,Float64} or ParticleDefaultsParam")
         end
 
-        x = x - floor(x)
-        y = y - floor(y)
+        dx = mesh_size[1]
+        dy = mesh_size[2]
+        x = (x - floor(x)) * dx
+        y = (y - floor(y)) * dy
 
-        ui_c_1 = local_mean_speed_gaussian_2D([x, y], [ui_c̄_x, ui_c̄_y], ui_M)
-        ui_c_2 = local_mean_speed_gaussian_2D([1-x, y], [ui_c̄_x, ui_c̄_y], ui_M)
-        ui_c_3 = local_mean_speed_gaussian_2D([x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
-        ui_c_4 = local_mean_speed_gaussian_2D([1-x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_c_1 = local_mean_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        ui_c_2 = local_mean_speed_gaussian_2D([dx, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        ui_c_3 = local_mean_speed_gaussian_2D([0, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        ui_c_4 = local_mean_speed_gaussian_2D([dx, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
 
         ui_e = exp(ui_lne)
         c_speed = speed(ui_c̄_x, ui_c̄_y)
@@ -142,10 +144,10 @@ function GetParticleEnergyMomentumSwell(z0::TT) where {TT<:Union{Vector{Float64}
         m_y4 = ui_c_4[2] * ui_e / c_speed^2 / 2
 
 
-        ui_M_C1 = local_cov_speed_gaussian_2D([x, y], [ui_c̄_x, ui_c̄_y], ui_M)
-        ui_M_C2 = local_cov_speed_gaussian_2D([1-x, y], [ui_c̄_x, ui_c̄_y], ui_M)
-        ui_M_C3 = local_cov_speed_gaussian_2D([x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
-        ui_M_C4 = local_cov_speed_gaussian_2D([1-x, 1-y], [ui_c̄_x, ui_c̄_y], ui_M)
+        ui_M_C1 = local_cov_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        ui_M_C2 = local_cov_speed_gaussian_2D([1, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        ui_M_C3 = local_cov_speed_gaussian_2D([0, 1], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        ui_M_C4 = local_cov_speed_gaussian_2D([1, 1], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
         final_ui_M1 = [ui_M_C1[1,1] ui_M_C1[1,2] 0 0;
                       ui_M_C1[2,1] ui_M_C1[2,2] 0 0;
                       0 0 1 0;
@@ -192,16 +194,16 @@ end
 GetParticleEnergyMomentum(PI)
 
 """
-function GetParticleEnergyMomentum(PI::AbstractParticleInstance)
-        return GetParticleEnergyMomentum(PI.ODEIntegrator.u)
+function GetParticleEnergyMomentum(PI::AbstractParticleInstance, mesh_size::Vector{Float64})
+        return GetParticleEnergyMomentum(PI.ODEIntegrator.u, mesh_size)
 end
 
-function GetParticleEnergyMomentum(zi::Dict)
-        return GetParticleEnergyMomentum([zi[lne], zi[c̄_x], zi[c̄_y], zi[x], zi[y], zi.cov_xk[1,1], zi.cov_xk[1,2], zi.cov_xk[2,2], zi.cov_xk[1,3], zi.cov_xk[2,3], zi.cov_xk[1,4], zi.cov_xk[2,4], zi.cov_xk[3,3], zi.cov_xk[3,4], zi.cov_xk[4,4]])
+function GetParticleEnergyMomentum(zi::Dict, mesh_size::Vector{Float64})
+        return GetParticleEnergyMomentum([zi[lne], zi[c̄_x], zi[c̄_y], zi[x], zi[y], zi.cov_xk[1,1], zi.cov_xk[1,2], zi.cov_xk[2,2], zi.cov_xk[1,3], zi.cov_xk[2,3], zi.cov_xk[1,4], zi.cov_xk[2,4], zi.cov_xk[3,3], zi.cov_xk[3,4], zi.cov_xk[4,4]], mesh_size)
 end
 
-function GetParticleEnergyMomentum(zi::ParticleDefaultsParam)
-        return GetParticleEnergyMomentum([zi.lne, zi.c̄_x, zi.c̄_y, zi.x, zi.y, zi.cov_xk[1,1], zi.cov_xk[1,2], zi.cov_xk[2,2], zi.cov_xk[1,3], zi.cov_xk[2,3], zi.cov_xk[1,4], zi.cov_xk[2,4], zi.cov_xk[3,3], zi.cov_xk[3,4], zi.cov_xk[4,4]])
+function GetParticleEnergyMomentum(zi::ParticleDefaultsParam, mesh_size::Vector{Float64})
+        return GetParticleEnergyMomentum([zi.lne, zi.c̄_x, zi.c̄_y, zi.x, zi.y, zi.cov_xk[1,1], zi.cov_xk[1,2], zi.cov_xk[2,2], zi.cov_xk[1,3], zi.cov_xk[2,3], zi.cov_xk[1,4], zi.cov_xk[2,4], zi.cov_xk[3,3], zi.cov_xk[3,4], zi.cov_xk[4,4]], mesh_size)
 end
 
 
@@ -223,7 +225,7 @@ function GetVariablesAtVertex(i_State::TT, x::Float64, y::Float64) where {TT<:Un
     c_y = m_y * e / (2 * m_amp^2)
     M_xk = m_Mxk * e / (2 * m_amp^2)
 
-    return MVector{15,Float64}(log(e), c_x, c_y, x, y, M_xk[1,1], M_xk[1,2], M_xk[2,2], M_xk[1,3], M_xk[2,3], M_xk[1,4], M_xk[2,4], M_xk[3,3], M_xk[3,4], M_xk[4,4])
+    return MVector{15,Float64}(log(e), c_x, c_y, x, y, unfold(M_xk)...)
 end
 
 
@@ -345,6 +347,7 @@ Find initial conditions for particle. Used at the beginning of the experiment.
 """
 function InitParticleValues(
         defaults::PP,
+        mesh_size::Vector{Float64},
         xy::Tuple{Float64, Float64},
         uv::Tuple{Number, Number}, 
         DT) where {PP<:Union{Nothing,ParticleDefaultsParam}}
@@ -372,11 +375,12 @@ function InitParticleValues(
                         #c̄_x = u_min[2]
                         #c̄_y = u_min[3]
                         
-                        particle_on = true
+                        particle_on = false
                 end        
                 
                 # initialize particle instance based on above devfined values
-                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3] ,  xx, yy, [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
+                c_speed = speed(ui[2], ui[3])
+                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3] ,  xx, yy, [(1/sqrt(2)*c_speed/2)^2 0. 0. 0.; 0. (1/sqrt(2)*c_speed/2)^2 0. 0.; 0. 0. (mesh_size[1])^2 0.; 0. 0. 0. (mesh_size[2])^2])            # TO BE CHANGED
         else
                 particle_defaults = defaults
                 particle_on = true
@@ -405,6 +409,7 @@ returns:
 """
 function ResetParticleValues(
         defaults::PP,
+        mesh_size::Vector{Float64},
         xy::Tuple{Float64,Float64}, #PI::AbstractParticleInstance, #< -------- this should be just xy tuple that can be (0,0)
         wind_tuple,
         DT, vector=true) where {PP<:Union{Nothing,ParticleDefaultsParam,Vector{Float64}}}
@@ -419,7 +424,8 @@ function ResetParticleValues(
 
                 ui = FetchRelations.get_initial_windsea(u_init, v_init, DT, particle_state=true)
                 # seed particle given fetch relations
-                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3], xy[1], xy[2], [1. 0. 0. 0.; 0. 1. 0. 0.; 0. 0. 1. 0.; 0. 0. 0. 1.])
+                c_speed = speed(ui[2], ui[3])
+                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3], xy[1], xy[2], [(1/sqrt(2)*c_speed/2)^2 0. 0. 0.; 0. (1/sqrt(2)*c_speed/2)^2 0. 0.; 0. 0. (mesh_size[1])^2 0.; 0. 0. 0. (mesh_size[2])^2])
 
         elseif typeof(defaults) == Vector{Float64} # this is for the case of minimal wind sea
                 particle_defaults = defaults
@@ -558,7 +564,7 @@ function SeedParticle(
 
         # define initial condition
         # particle initial condition is always (0,0) in relative coordinates not xy anymore
-        z_i, particle_on = InitParticleValues(particle_defaults, (0.0, 0.0) , ij_wind, DT)
+        z_i, particle_on = InitParticleValues(particle_defaults, [gridstats.dx, gridstats.dy], (0.0, 0.0) , ij_wind, DT)
 
         # check if point is boundary point <-- replace in the future with with mask: 0 = land, 1 = ocean, 2= land boundary, 3 = domain boundary
         # boundary_point = check_boundary_point(ij, boundary, periodic_boundary) # old version that compares to list 
@@ -566,7 +572,7 @@ function SeedParticle(
 
         # add initial state to State vector
         if particle_on
-                init_z0_to_State!(State, ij, GetParticleEnergyMomentum(z_i))
+                init_z0_to_State!(State, ij, GetParticleEnergyMomentum(z_i, [gridstats.dx, gridstats.dy]))
         end
 
         # check if Propgation Correction is set in gridstats

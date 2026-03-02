@@ -1,189 +1,5 @@
-ENV["JULIA_INCREMENTAL_COMPILE"]=true
-using Pkg
-# This will be replaced by the module load in the future
-Pkg.activate(".")  # Activate the PiCLES package 
-
-using PiCLES
-using PiCLES.Operators.core_2D_parametric: ParticleDefaultsParam 
-using PiCLES.Models.ParametricModels: Parametric2D
-using PiCLES.Simulations
-using PiCLES.Grids.CartesianGrid: TwoDCartesianGridMesh, ProjetionKernel, TwoDCartesianGridStatistics
-
-using PiCLES.ParticleSystems: particle_waves_v7 as PW
-using Oceananigans.Units
-
-# just for simple plotting
 import Plots as plt
-
-# Parameters
-U10, V10 = 10., 10.
-DT = 10minutes
-r_g0 = 0.85 # ratio of c / c_g (phase velocity/ group velocity).
-xmin = 0.
-xmax = 600e3
-ymin = 0.
-ymax = 600e3
-Nx = 151
-Ny = 151
-t_final = 72hour
- 
-# Define wind functions
-function ind(x,a,b)
-  if x>= a && x<b
-    return 1
-  else
-    return 0
-  end
-end
-
-function distance(x, y, x0, y0)
-  return sqrt((x-x0)^2 + (y-y0)^2)
-end
-
-function get_tot_energy_domain(fstate)
-        return sum(fstate[:,:,1])
-end
-
-function u_line(x, y, t)
-  dist = abs(x - 25e3) # distance from the center line
-  if dist <= 5e3
-    return U10
-  else
-    return 0.0
-  end
-end
-
-function u_stopped_line(x, y, t)
-  if y <= 150e3
-    dist = abs(x - 25e3) # distance from the center line
-    if dist <= 5e3
-      return U10
-    else
-      return 0.0
-    end
-  else
-    return 0.0
-  end
-end
-
-angle1 = pi/4
-function u_stopped_angled_line(x, y, t)
-  if x==0.
-    angle2 = pi/2
-  else
-    angle2 = atan(y/x)
-  end
-  dist = sqrt(x^2+y^2)
-  opposite = cos(angle1 - angle2) * dist
-  adjacent = abs(sin(angle1 - angle2)) * dist
-  if opposite <= 125e3
-    if adjacent <= 5e3
-      return U10 * cos(angle1)
-    else
-      return 0.0
-    end
-  else
-    return 0.0
-  end
-end
-
-function v_stopped_angled_line(x, y, t)
-  if x==0.
-    angle2 = pi/2
-  else
-    angle2 = atan(y/x)
-  end
-  dist = sqrt(x^2+y^2)
-  opposite = cos(angle1 - angle2) * dist
-  adjacent = abs(sin(angle1 - angle2)) * dist
-  if opposite <= 125e3
-    if adjacent <= 5e3
-      return U10 * sin(angle1)
-    else
-      return 0.0
-    end
-  else
-    return 0.0
-  end
-end
-
-function u_smoothed_line(x, y, t)
-  dist = abs(x - 25e3) # distance from the center line
-  if dist <= 5e3
-    return U10
-  elseif dist <= 10e3
-    return U10 * (1 - (dist - 5e3) / 5e3) # linearly decrease to 0 between 5km and 10km
-  else
-    return 0.0
-  end
-end
-
-function u_sphere(x, y, t)
-  if t <= 300hour
-    dist = distance(x, y, 75e3, 15e3) # distance from the center of the wind blob
-    if dist <= 5e3
-      return U10
-    else
-      return 0.0
-    end
-  else
-    return 0.0
-  end
-end
-u_uniform(x, y, t) = U10
-v_uniform(x, y, t) = V10 *0.
-
-used_u = u_stopped_angled_line
-used_v = v_stopped_angled_line
-winds = (u=used_u, v=used_v)
-
-# Define grid
-grid = TwoDCartesianGridMesh(xmax, Nx, ymax, Ny)
-# grid = Grids.SphericalGrid.TwoDSphericalGridMesh(0.0, 180.0, 91, 0, 80.0, 61; periodic_boundary=(true, false))
-
-
-# Define ODE parameters
-ODEpars, Const_ID, Const_Scg = PW.ODEParameters(r_g=r_g0)
-
-# Define particle equations
-particle_system = PW.particle_equations(used_u, used_v, γ=Const_ID.γ, q=Const_ID.q);
-
-# Calculate minimal wind sea based on characteristic winds
-WindSeamin = FetchRelations.MinimalWindsea(U10, V10, DT)
-
-# Define default particle
-initCovarianceMatrix = [1.0 0.0 0.0 0.0; 0.0 1.0 0.0 0.0; 0.0 0.0 grid.stats.dx^2 0.0; 0.0 0.0 0.0 grid.stats.dy^2]
-default_particle = ParticleDefaultsParam(WindSeamin["lne"], WindSeamin["cg_bar_x"], WindSeamin["cg_bar_y"], 0.0, 0.0, initCovarianceMatrix)
-
-# Define ODE settings
-ODE_settings = PW.ODESettings(
-  Parameters=ODEpars,
-  # define mininum energy threshold
-  log_energy_minimum=WindSeamin["lne"],
-  saving_step=DT,
-  timestep=DT,
-  total_time=T = 6days,
-  dt=1e-3, 
-  dtmin=1e-4, 
-  force_dtmin=true)
-
-# Build wave model
-wave_model = Parametric2D(; grid=grid,
-    winds=winds,
-    ODEsys=particle_system,
-    ODEsets=ODE_settings,
-    # ODEinit_type=default_particle,
-    periodic_boundary=false,
-    minimal_particle=FetchRelations.MinimalParticle(U10, V10, DT),
-    movie=true)
-
-# Build simulation
-wave_simulation = Simulation(wave_model, Δt=DT, verbose = true, stop_time=t_final)#1hours)
-
-# Run simulation
-run!(wave_simulation, cash_store=true)
-
-# ------------ END OF SIMULATION ; BEGIN POST-PROCESSING AND PLOTTING ------------
+using Oceananigans.Units
 
 function fold(v::Vector{Float64})
         return [v[1] v[2] v[4] v[6]; v[2] v[3] v[5] v[7]; v[4] v[5] v[8] v[9]; v[6] v[7] v[9] v[10]]
@@ -191,6 +7,18 @@ end
 
 function unfold(M::Matrix{Float64})
         return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
+end
+
+function interp(x,y,func,gridX,gridY)
+  ix = argmin((-gridX[:,1] .+ x) .>= 0)-1
+  iy = argmin((-gridY[1,:] .+ y) .>= 0)-1
+
+  dx = gridX[ix+1,1] - gridX[ix,1]
+  dy = gridY[1,iy+1] - gridY[1,iy]
+  wx = (x-gridX[ix,1])/dx
+  wy = (y-gridY[1,iy])/dy
+
+  return wx*wy*func[ix,iy] + (1-wx)*wy*func[ix+1,iy] + wx*(1-wy)*func[ix,iy+1] + (1-wx)*(1-wy)*func[ix+1,iy+1]
 end
 
 frame_size = (1220, 1080)
@@ -219,6 +47,26 @@ for i in 1:length(wave_simulation.store.store)
   max_speed = round(maximum((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2))), digits=4)
   max_speed_position = argmax((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2)))
   max_speeds[i] = max_speed
+  # c = cgrad([:red,:yellow,:green], [0.50, 0.9995], categorical = false)
+  nArrowsX = 15
+  nArrowsY = 15
+  xlim = (xmin+(xmax-xmin)/(nArrowsX+2), xmax-(xmax-xmin)/(nArrowsX+2))
+  ylim = (ymin+(ymax-ymin)/(nArrowsY+2), ymax-(ymax-ymin)/(nArrowsY+2))
+  xs = range(xlim...; length=nArrowsX)
+  ys = range(ylim...; length=nArrowsY)
+  X, Y = reim(complex.(xs', ys))
+  Ux = zeros(nArrowsX, nArrowsY)
+  Uy = zeros(nArrowsX, nArrowsY)
+  for i in 1:(length(xs))
+    for j in 1:(length(ys))
+        Ux[i,j] = interp(xs[i], ys[j], c_x', grid.data.x, grid.data.y)
+        Uy[i,j] = interp(xs[i], ys[j], c_y', grid.data.x, grid.data.y)
+    end
+  end
+  scalefactor = (xs[2]-xs[1])/2 /maximum(Ux)
+  Ux = scalefactor .* Ux
+  Uy = scalefactor .* Uy
+
   plt.plot!(legend=:none,
                 title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(max_speed_position[1])*","*string(max_speed_position[2])*")",
                 ylabel="y position",
@@ -227,6 +75,8 @@ for i in 1:length(wave_simulation.store.store)
                 ylims=(wave_simulation.model.grid.stats.ymin, wave_simulation.model.grid.stats.ymax)
                 ,clim=(0.0,max_energy*0.5)
   )
+  plt.quiver!(X, Y; quiver=(Ux, Uy), color=:cyan)
+
 
   pos_x = wave_simulation.model.grid.stats.xmin + (max_speed_position[1] - 1) * wave_simulation.model.grid.stats.dx
   pos_y = wave_simulation.model.grid.stats.ymin + (max_speed_position[2] - 1) * wave_simulation.model.grid.stats.dy
@@ -238,7 +88,7 @@ end
 
 plt.plot(1:length(max_speeds), max_speeds, title="Max speed over time", xlabel="Time step", ylabel="Max speed (m/s)", size=(860, 1080))
 plt.savefig("plots/test_case_parametric/heatmaps/max_speeds_over_time.png")
-
+"""
 fstate = wave_simulation.store.store[end]
 end_cov_xx = zeros(size(fstate)[2])
 end_cov_cxcx = zeros(size(fstate)[2])
@@ -333,3 +183,4 @@ plt.plot(distances,(swell_cov), title="Log-log plot of covariance vs y position"
         , size=(860, 1080)
 )
 plt.savefig("plots/test_case_parametric/covariances/0_loglog_cov_C_in_position.png")
+"""

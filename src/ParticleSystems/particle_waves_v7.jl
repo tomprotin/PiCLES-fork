@@ -550,31 +550,30 @@ function particle_equations(u_wind, v_wind; γ::Number=0.88, q::Number=-1 / 4.0,
             currents = false
             if currents
                 @info "currents are not implemented yet!"
-                M=[0 0 0 0;
+                N=[0 0 0 0;
                    0 0 0 0;
                    0 0 0 0;
                    0 0 0 0]
             else
-                M13 = sqrt(params.g)/2*(c̄_y^2-2*c̄_x^2)/((c̄_x^2+c̄_y^2)^(5/2))
-                M14 = -3*sqrt(params.g)/2*c̄_x*c̄_y/((c̄_x^2+c̄_y^2)^(5/2))
-                M23 = -3*sqrt(params.g)/2*c̄_x*c̄_y/((c̄_x^2+c̄_y^2)^(5/2))
-                M24 = sqrt(params.g)/2*(c̄_x^2-2*c̄_y^2)/((c̄_x^2+c̄_y^2)^(5/2))
+                N13 = 1.0
+                N24 = 1.0
 
-                M = [0 0 M13 M14;
-                     0 0 M23 M24;
-                     0 0 0 0;
-                     0 0 0 0]
-                M_prime = [0 0 0 0;
-                           0 0 0 0;
-                           M13 M23 0 0;
-                           M14 M24 0 0]
+                N_prime = [0 0 N13 0;
+                            0 0 0 N24;
+                            0 0 0 0;
+                            0 0 0 0
+                ]
+                N = [0 0 0 0;
+                    0 0 0 0;
+                    N13 0 0 0;
+                    0 N24 0 0
+                ]
             end
-            dP = M*covariance_mat + covariance_mat*M_prime
+            dP = N*covariance_mat + covariance_mat*N_prime
             dz[6:15] .= unfold(dP)
             if lne <= -6
                 dz[6:15] .= 0.0
             end
-            dz[6:15] .= 0.0 # for testing without covariance matrix
 
             if debug_output
                 additional_output = [
