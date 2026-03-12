@@ -421,7 +421,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                 # test if winds where strong enough
                 if speed_square(wind_end[1], wind_end[2]) >= wind_min_squared
                         # winds are large eneough, reinit
-                        ui = ResetParticleValuesParam(default_particle, [grid_stats.dx, grid_stats.dy], xy, wind_end, DT)
+                        ui = ResetParticleValuesParam(default_particle, [Grid.dx, Grid.dy], xy, wind_end, DT)
                         reset_PI_u!(PI, ui =ui)
                         PI.on = true
                 end
@@ -446,7 +446,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                         winds.v(PI.position_xy[1], PI.position_xy[2], t_end)))::Tuple{Float64,Float64}
                 @show winds_start
 
-                ui = ResetParticleValuesParam(default_particle, [grid_stats.dx, grid_stats.dy], xy, winds_start, DT)
+                ui = ResetParticleValuesParam(default_particle, [Grid.dx, Grid.dy], xy, winds_start, DT)
                 @show PI.ODEIntegrator.u
                 reset_PI_u!(PI, ui=ui)
 
@@ -458,7 +458,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                                         (winds.u(PI.position_xy[1], PI.position_xy[2], t_start),
                                         winds.v(PI.position_xy[1], PI.position_xy[2], t_start)))::Tuple{Float64,Float64}
 
-                ui = ResetParticleValuesParam(default_particle, [grid_stats.dx, grid_stats.dy], xy, winds_start, DT)
+                ui = ResetParticleValuesParam(default_particle, [Grid.dx, Grid.dy], xy, winds_start, DT)
                 reset_PI_u!(PI, ui=ui)
 
         elseif PI.ODEIntegrator.u[1] > log_energy_maximum
@@ -478,7 +478,7 @@ function advance!(PI::AbstractParametricParticleInstance,
 
         #if PI.ODEIntegrator.u[1] > -13.0 #ODEs.log_energy_minimum # the minimum enerçy is distributed to 4 neighbouring particles
         if PI.on 
-                wind = [winds.u(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t), winds.v(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t)]
+                wind = [winds.u(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t+DT), winds.v(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t+DT)]
                 ParticleToNode!(PI, wind, S, Grid, periodic_boundary)
         end
 
@@ -955,11 +955,26 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
                 PI.on = true
 
  
-        else # particle is below energy threshold & on boundary
+        elseif (u_state[1] >= minimal_state[1]) # "Swell case" where energy is above threshold, not enough wind, whether boundary or not
+                ui = GetVariablesAtVertexParam(u_state, xy[1], xy[2])
+                mesh_size = [grid_stats.dx, grid_stats.dy]
+                reset_PI_ut!(PI, mesh_size; ui=ui, ti=last_t, stochas=false)
+                PI.on = true
+        else # particle is below energy threshold & wind is below threshold 
                 #PI.ODEIntegrator.u = ResetParticleValuesParam(minimal_particle, xy, wind_tuple, DT)
                 # if ~PI.boundary
                 #         @info u_state
                 # end
+                m_cx = sqrt(minimal_state[2]/2)
+                m_cy = sqrt(minimal_state[2]/2)
+
+                u_state[1] = minimal_state[1]
+                u_state[2] = m_cx
+                u_state[3] = m_cy
+                ui = GetVariablesAtVertexParam(u_state, xy[1], xy[2])
+                mesh_size = [grid_stats.dx, grid_stats.dy]
+                reset_PI_ut!(PI, mesh_size; ui=ui, ti=last_t, stochas=false)
+
                 PI.on = false
         end
 

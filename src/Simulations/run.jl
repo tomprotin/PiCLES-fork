@@ -57,7 +57,7 @@ function plot_state_and_error_points(wave_simulation, gn)
                 ylims=(gn.stats.ymin, gn.stats.ymax)) |> display
 end
 
-function write_particles_to_csv(wave_model)
+function write_particles_to_csv(wave_model::Abstract2DStochasticModel)
         sec=string(Int64(floor((wave_model.clock.time)/60)))
         dec=string(Int64(floor(10*(wave_model.clock.time/60-floor((wave_model.clock.time)/60)))))
         save_path = wave_model.plot_savepath
@@ -84,7 +84,53 @@ function write_particles_to_csv(wave_model)
         data2 = Tables.table(transpose(wave_model.State[:, :, 1]))
         CSV.write(save_path*"/data/particles_"*sec*","*dec*".csv", data)
         CSV.write(save_path*"/data/mesh_values_"*sec*","*dec*".csv", data2)
-    end
+end
+
+function fold(v::Vector{Float64})
+        return [v[1] v[2] v[4] v[6]; v[2] v[3] v[5] v[7]; v[4] v[5] v[8] v[9]; v[6] v[7] v[9] v[10]]
+end
+
+function unfold(M::Matrix{Float64})
+        return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
+end
+
+function write_particles_to_csv(wave_model::Abstract2DParametricModel)
+        iteration = wave_model.clock.iteration
+        save_path = "plots/test_case_parametric/data"
+
+        nParticles = wave_model.grid.stats.Nx.N * wave_model.grid.stats.Ny.N
+
+        parts = wave_model.ParticleCollection[(end-nParticles+1):end]
+
+        logE = zeros(nParticles)
+        cx = zeros(nParticles)
+        cy = zeros(nParticles)
+        x = zeros(nParticles)
+        y = zeros(nParticles)
+        M1 = zeros(nParticles)
+        M2 = zeros(nParticles)
+        M3 = zeros(nParticles)
+        M4 = zeros(nParticles)
+        M5 = zeros(nParticles)
+        M6 = zeros(nParticles)
+        M7 = zeros(nParticles)
+        M8 = zeros(nParticles)
+        M9 = zeros(nParticles)
+        M10 = zeros(nParticles)
+        for i in 1:nParticles
+                logE[i] = parts[i].ODEIntegrator[1]
+                cx[i] = parts[i].ODEIntegrator[2]
+                cy[i] = parts[i].ODEIntegrator[3]
+                x[i] = parts[i].ODEIntegrator[4]
+                y[i] = parts[i].ODEIntegrator[5]
+                M1[i], M2[i], M3[i], M4[i], M5[i], M6[i], M7[i], M8[i], M9[i], M10[i] = parts[i].ODEIntegrator[6:15]
+        end
+    
+        data = DataFrame(id=1:nParticles, logE = logE, cx = cx, cy = cy, x = x, y = y, M1 = M1, M2 = M2, M3 = M3, M4 = M4, M5 = M5, M6 = M6, M7 = M7, M8 = M8, M9 = M9, M10 = M10)
+        data2 = Tables.table(transpose(wave_model.State[:, :, 1]))
+        CSV.write(save_path*"/particles/particles_"*string(iteration)*".csv", data)
+        CSV.write(save_path*"/mesh_values/mesh_values_"*string(iteration)*".csv", data2)
+end
 
 function get_tot_energy_domain(wave_simulation)
         return sum(wave_simulation.model.State[:,:,1])
@@ -159,14 +205,16 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
         if cash_store
                 sim.store = CashStore([], 1)
                 sim.store.iteration += 1
-                push!(sim.store.store, copy(sim.model.State))
+                # push!(sim.store.store, copy(sim.model.State))
+                write_particles_to_csv(sim.model)
                 if sim.verbose
                         @info "write inital state to cash store..."
                 end
         end
 
         if store
-                push_state_to_storage!(sim)
+                # push_state_to_storage!(sim)
+                write_particles_to_csv(sim.model)
                 sim.store.iteration += 1
                 if sim.verbose
                         @info "write inital state to store..."
@@ -205,7 +253,8 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                 end
 
                 if store
-                        push_state_to_storage!(sim)
+                        # push_state_to_storage!(sim)
+                        write_particles_to_csv(sim.model)
                         sim.store.iteration += 1
                         if sim.verbose
                                 @info string(sim.model.clock.iteration) * " iterations, time = " * string(Int64(floor(sim.model.clock.time/3600))) * "h"* string(Int64(floor((sim.model.clock.time/60)%60)))
@@ -216,7 +265,8 @@ function run!(sim; store=false, pickup=false, cash_store=false, debug=false)
                 end
 
                 if cash_store
-                        push!(sim.store.store, copy(sim.model.State))
+                        # push!(sim.store.store, copy(sim.model.State))
+                        write_particles_to_csv(sim.model)
                         sim.store.iteration += 1
                         if sim.verbose
                                 @info string(sim.model.clock.iteration) * " iterations, time = " * string(Int64(floor(sim.model.clock.time/3600))) * "h"* string(Int64(floor((sim.model.clock.time/60)%60)))

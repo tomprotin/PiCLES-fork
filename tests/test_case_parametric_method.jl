@@ -17,16 +17,16 @@ import Plots as plt
 
 # Parameters
 U10, V10 = 10., 10.
-DT = 10minutes
+DT = 20minutes
 r_g0 = 0.85 # ratio of c / c_g (phase velocity/ group velocity).
 xmin = 0.
-xmax = 600e3
+xmax = 1496e3
 ymin = 0.
-ymax = 600e3
-Nx = 151
-Ny = 151
-t_final = 72hour
- 
+ymax = 1496e3
+Nx = 188
+Ny = 188
+t_final = 168hour
+
 # Define wind functions
 function ind(x,a,b)
   if x>= a && x<b
@@ -68,6 +68,17 @@ end
 
 angle1 = pi/4
 function u_stopped_angled_line(x, y, t)
+  time_coeff = 0.0
+  if t<=10.0*3600
+    time_coeff = t / (10.0*3600)
+    time_coeff = time_coeff*0.8 + 0.2
+  elseif t<=40.0*3600
+    time_coeff = 1.0
+    time_coeff = time_coeff*0.8 + 0.2
+  elseif t <= 50.0*3600
+    time_coeff = ((50.0*3600-40.0*3600)-(t-40.0*3600))/(50.0*3600-40.0*3600)
+    time_coeff = time_coeff*0.8 + 0.2
+  end
   if x==0.
     angle2 = pi/2
   else
@@ -78,7 +89,7 @@ function u_stopped_angled_line(x, y, t)
   adjacent = abs(sin(angle1 - angle2)) * dist
   if opposite <= 125e3
     if adjacent <= 5e3
-      return U10 * cos(angle1)
+      return time_coeff * U10 * cos(angle1)
     else
       return 0.0
     end
@@ -88,6 +99,17 @@ function u_stopped_angled_line(x, y, t)
 end
 
 function v_stopped_angled_line(x, y, t)
+  time_coeff = 0.0
+  if t<=10*3600
+    time_coeff = t / (10*3600)
+    time_coeff = time_coeff*0.8 + 0.2
+  elseif t<=40*3600
+    time_coeff = 1.0
+    time_coeff = time_coeff*0.8 + 0.2
+  elseif t <= 50*3600
+    time_coeff = ((50*3600-40*3600)-(t-40*3600))/(50*3600-40*3600)
+    time_coeff = time_coeff*0.8 + 0.2
+  end
   if x==0.
     angle2 = pi/2
   else
@@ -98,7 +120,109 @@ function v_stopped_angled_line(x, y, t)
   adjacent = abs(sin(angle1 - angle2)) * dist
   if opposite <= 125e3
     if adjacent <= 5e3
-      return U10 * sin(angle1)
+      return time_coeff * U10 * sin(angle1)
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
+
+function u_stopped_angled_line_gaussian(x, y, t)
+  time_coeff = 0.0
+  if t<=50.0*3600
+    time_coeff = exp(-0.5*(t-10.0*3600)^2/(15*3600)^2)
+  end
+  if x==0.
+    angle2 = pi/2
+  else
+    angle2 = atan(y/x)
+  end
+  dist = sqrt(x^2+y^2)
+  opposite = cos(angle1 - angle2) * dist
+  adjacent = abs(sin(angle1 - angle2)) * dist
+  if opposite <= 125e3
+    if adjacent <= 7.5e3
+      return time_coeff * U10 * cos(angle1)
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
+
+function v_stopped_angled_line_gaussian(x, y, t)
+  time_coeff = 0.0
+  if t<=50.0*3600
+    time_coeff = exp(-0.5*(t-10.0*3600)^2/(15*3600)^2)
+  end
+  if x==0.
+    angle2 = pi/2
+  else
+    angle2 = atan(y/x)
+  end
+  dist = sqrt(x^2+y^2)
+  opposite = cos(angle1 - angle2) * dist
+  adjacent = abs(sin(angle1 - angle2)) * dist
+  if opposite <= 125e3
+    if adjacent <= 7.5e3
+      return time_coeff * U10 * sin(angle1)
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
+
+function u_stopped_angled_line_gaussian_rise(x, y, t)
+  time_coeff = 1.0
+  if t<=24.0*3600
+    time_coeff = exp(-0.5*(t-24.0*3600)^2/(12.0*3600)^2)
+    time_coeff = 0.2+0.8*time_coeff
+  end
+  if x==0.
+    angle2 = pi/2
+  else
+    angle2 = atan(y/x)
+  end
+  dist = sqrt(x^2+y^2)
+  opposite = cos(angle1 - angle2) * dist
+  adjacent = abs(sin(angle1 - angle2)) * dist
+  if opposite <= 125e3
+    if adjacent <= 7.5e3
+      return time_coeff * U10 * cos(angle1)
+    else
+      return 0.0
+    end
+  else
+    return 0.0
+  end
+end
+
+
+function v_stopped_angled_line_gaussian_rise(x, y, t)
+  time_coeff = 1.0
+  if t<=24.0*3600
+    time_coeff = exp(-0.5*(t-24.0*3600)^2/(12.0*3600)^2)
+    time_coeff = 0.2+0.8*time_coeff
+  end
+  if x==0.
+    angle2 = pi/2
+  else
+    angle2 = atan(y/x)
+  end
+  dist = sqrt(x^2+y^2)
+  opposite = cos(angle1 - angle2) * dist
+  adjacent = abs(sin(angle1 - angle2)) * dist
+  if opposite <= 125e3
+    if adjacent <= 7.5e3
+      return time_coeff * U10 * sin(angle1)
     else
       return 0.0
     end
@@ -133,8 +257,8 @@ end
 u_uniform(x, y, t) = U10
 v_uniform(x, y, t) = V10 *0.
 
-used_u = u_stopped_angled_line
-used_v = v_stopped_angled_line
+used_u = u_stopped_angled_line_gaussian
+used_v = v_stopped_angled_line_gaussian
 winds = (u=used_u, v=used_v)
 
 # Define grid
@@ -193,6 +317,19 @@ function unfold(M::Matrix{Float64})
         return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
 end
 
+function interp(x,y,func,gridX,gridY)
+  ix = argmin((-gridX[:,1] .+ x) .>= 0)-1
+  iy = argmin((-gridY[1,:] .+ y) .>= 0)-1
+
+  dx = gridX[ix+1,1] - gridX[ix,1]
+  dy = gridY[1,iy+1] - gridY[1,iy]
+  wx = (x-gridX[ix,1])/dx
+  wy = (y-gridY[1,iy])/dy
+
+  return wx*wy*func[ix,iy] + (1-wx)*wy*func[ix+1,iy] + wx*(1-wy)*func[ix,iy+1] + (1-wx)*(1-wy)*func[ix+1,iy+1]
+end
+
+"""
 frame_size = (1220, 1080)
 
 max_speeds =  zeros(length(wave_simulation.store.store))
@@ -219,6 +356,26 @@ for i in 1:length(wave_simulation.store.store)
   max_speed = round(maximum((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2))), digits=4)
   max_speed_position = argmax((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2)))
   max_speeds[i] = max_speed
+  # c = cgrad([:red,:yellow,:green], [0.50, 0.9995], categorical = false)
+  nArrowsX = 25
+  nArrowsY = 25
+  xlim = (xmin+(xmax-xmin)/(nArrowsX+2), xmax-(xmax-xmin)/(nArrowsX+2))
+  ylim = (ymin+(ymax-ymin)/(nArrowsY+2), ymax-(ymax-ymin)/(nArrowsY+2))
+  xs = range(xlim...; length=nArrowsX)
+  ys = range(ylim...; length=nArrowsY)
+  X, Y = reim(complex.(xs', ys))
+  Ux = zeros(nArrowsX, nArrowsY)
+  Uy = zeros(nArrowsX, nArrowsY)
+  for i in 1:(length(xs))
+    for j in 1:(length(ys))
+        Ux[i,j] = interp(xs[i], ys[j], c_x', grid.data.x, grid.data.y)
+        Uy[i,j] = interp(xs[i], ys[j], c_y', grid.data.x, grid.data.y)
+    end
+  end
+  scalefactor = (xs[2]-xs[1])/2 /maximum(Ux)
+  Ux = scalefactor .* Ux
+  Uy = scalefactor .* Uy
+
   plt.plot!(legend=:none,
                 title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(max_speed_position[1])*","*string(max_speed_position[2])*")",
                 ylabel="y position",
@@ -227,6 +384,8 @@ for i in 1:length(wave_simulation.store.store)
                 ylims=(wave_simulation.model.grid.stats.ymin, wave_simulation.model.grid.stats.ymax)
                 ,clim=(0.0,max_energy*0.5)
   )
+  plt.quiver!(X, Y; quiver=(Ux, Uy), color=:cyan)
+
 
   pos_x = wave_simulation.model.grid.stats.xmin + (max_speed_position[1] - 1) * wave_simulation.model.grid.stats.dx
   pos_y = wave_simulation.model.grid.stats.ymin + (max_speed_position[2] - 1) * wave_simulation.model.grid.stats.dy
@@ -333,3 +492,4 @@ plt.plot(distances,(swell_cov), title="Log-log plot of covariance vs y position"
         , size=(860, 1080)
 )
 plt.savefig("plots/test_case_parametric/covariances/0_loglog_cov_C_in_position.png")
+"""

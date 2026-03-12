@@ -91,8 +91,8 @@ function GetParticleEnergyMomentum(z0::TT, mesh_size::Vector{Float64}) where {TT
         m_x = ui_c̄_x * ui_e / c_speed^2 / 2
         m_y = ui_c̄_y * ui_e / c_speed^2 / 2
 
-        ui_M = [(1/sqrt(2)*c_speed/2)^2 0 0 0;
-                0 (1/sqrt(2)*c_speed/2)^2 0 0;            # TO BE CHANGED
+        ui_M = [(1/sqrt(2)*c_speed/2)^2 -(1/sqrt(2)*c_speed/2)^2*0.5 0 0;
+                -(1/sqrt(2)*c_speed/2)^2*0.5 (1/sqrt(2)*c_speed/2)^2 0 0;            # TO BE CHANGED
                 0 0 mesh_size[1]^2 0;
                 0 0 0 mesh_size[2]^2
         ]
@@ -380,7 +380,7 @@ function InitParticleValues(
                 
                 # initialize particle instance based on above devfined values
                 c_speed = speed(ui[2], ui[3])
-                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3] ,  xx, yy, [(1/sqrt(2)*c_speed/2)^2 0. 0. 0.; 0. (1/sqrt(2)*c_speed/2)^2 0. 0.; 0. 0. (mesh_size[1])^2 0.; 0. 0. 0. (mesh_size[2])^2])            # TO BE CHANGED
+                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3] ,  xx, yy, [(1/sqrt(2)*c_speed/2)^2 -(1/sqrt(2)*c_speed/2)^2*0.5 0. 0.; -(1/sqrt(2)*c_speed/2)^2*0.5 (1/sqrt(2)*c_speed/2)^2 0. 0.; 0. 0. (mesh_size[1])^2 0.; 0. 0. 0. (mesh_size[2])^2])            # TO BE CHANGED
         else
                 particle_defaults = defaults
                 particle_on = true
@@ -425,7 +425,7 @@ function ResetParticleValues(
                 ui = FetchRelations.get_initial_windsea(u_init, v_init, DT, particle_state=true)
                 # seed particle given fetch relations
                 c_speed = speed(ui[2], ui[3])
-                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3], xy[1], xy[2], [(1/sqrt(2)*c_speed/2)^2 0. 0. 0.; 0. (1/sqrt(2)*c_speed/2)^2 0. 0.; 0. 0. (mesh_size[1])^2 0.; 0. 0. 0. (mesh_size[2])^2])
+                particle_defaults = ParticleDefaultsParam(ui[1], ui[2], ui[3], xy[1], xy[2], [(1/sqrt(2)*c_speed/2)^2 -(1/sqrt(2)*c_speed/2)^2*0.5 0. 0.; -(1/sqrt(2)*c_speed/2)^2*0.5 (1/sqrt(2)*c_speed/2)^2 0. 0.; 0. 0. (mesh_size[1])^2 0.; 0. 0. 0. (mesh_size[2])^2])
 
         elseif typeof(defaults) == Vector{Float64} # this is for the case of minimal wind sea
                 particle_defaults = defaults
