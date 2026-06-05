@@ -40,7 +40,7 @@ N_spec     = 80
 spec_cgrad = plt.cgrad(:plasma)
 
 # --- Thresholds (as fraction of global max) ---
-E_threshold_ws_frac = 0.001   # cells below max_energy * frac are masked
+E_threshold_ws_frac = 0.0001   # cells below max_energy * frac are masked
 spec_c_max_frac     = 1.4      # spectrum velocity axis = max_ws_global * frac
 
 # --- Histogram ---
@@ -620,12 +620,12 @@ for i in 1:iterations
         plt.plot!(p_globe, eq_dyn[1], eq_dyn[2], color = :grey30, lw = 1.5, label = false)
         # Depth-aware axis: exterior stubs always visible; interior only for the near-side pole.
         let _uz = cos(cam_el_dyn * π/180), _top = 1.5 * cos(cam_el_dyn * π/180)
-            plt.plot!(p_globe, [0.0, 0.0], [ 1.0,  _top], color=:grey30, lw=1.5, ls=:dash, label=false)
-            plt.plot!(p_globe, [0.0, 0.0], [-1.0, -_top], color=:grey30, lw=1.5, ls=:dash, label=false)
+            plt.plot!(p_globe, [0.0, 0.0], [ 1.0,  _top], color=:grey30, lw=1.5, ls=:solid, label=false)
+            plt.plot!(p_globe, [0.0, 0.0], [-1.0, -_top], color=:grey30, lw=1.5, ls=:solid, label=false)
             if cam_el_dyn > 1.0        # north pole faces camera → north interior on top
-                plt.plot!(p_globe, [0.0, 0.0], [_uz, 1.0],  color=:grey30, lw=1.5, ls=:dash, label=false)
+                plt.plot!(p_globe, [0.0, 0.0], [_uz, 1.0],  color=:grey30, lw=1.5, ls=:solid, label=false)
             elseif cam_el_dyn < -1.0   # south pole faces camera → south interior on top
-                plt.plot!(p_globe, [0.0, 0.0], [-_uz, -1.0], color=:grey30, lw=1.5, ls=:dash, label=false)
+                plt.plot!(p_globe, [0.0, 0.0], [-_uz, -1.0], color=:grey30, lw=1.5, ls=:solid, label=false)
             end
         end
         plt.plot!(p_globe, cos.(θ_c), sin.(θ_c), color = :black, lw = 2, label = false)
@@ -650,8 +650,8 @@ for i in 1:iterations
             plt.plot!(p_map, gx, gy, color = :grey60, lw = 0.8, label = false)
         end
         plt.plot!(p_map, equator1[1], equator1[2], color = :grey30, lw = 1.5, label = false)
-        plt.plot!(p_map, axis1_north[1], axis1_north[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
-        plt.plot!(p_map, axis1_south[1], axis1_south[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
+        plt.plot!(p_map, axis1_north[1], axis1_north[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
+        plt.plot!(p_map, axis1_south[1], axis1_south[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
         plt.plot!(p_map, cos.(θ_c), sin.(θ_c), color = :black, lw = 2, label = false)
 
         img2, _ = ortho_image(fstate, data_lon, data_lat, cam_az2, cam_el; N=300)
@@ -673,8 +673,8 @@ for i in 1:iterations
             plt.plot!(p_map2, gx, gy, color = :grey60, lw = 0.8, label = false)
         end
         plt.plot!(p_map2, equator2[1], equator2[2], color = :grey30, lw = 1.5, label = false)
-        plt.plot!(p_map2, axis2_north[1], axis2_north[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
-        plt.plot!(p_map2, axis2_south[1], axis2_south[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
+        plt.plot!(p_map2, axis2_north[1], axis2_north[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
+        plt.plot!(p_map2, axis2_south[1], axis2_south[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
         plt.plot!(p_map2, cos.(θ_c), sin.(θ_c), color = :black, lw = 2, label = false)
     end
 
@@ -1113,12 +1113,12 @@ for i in 1:iterations
         plt.plot!(p_ws_globe, eq_dyn_ws[1], eq_dyn_ws[2], color = :grey30, lw = 1.5, label = false)
         # Depth-aware axis: exterior stubs always visible; interior only for the near-side pole.
         let _uz = cos(cam_el_dyn * π/180), _top = 1.5 * cos(cam_el_dyn * π/180)
-            plt.plot!(p_ws_globe, [0.0, 0.0], [ 1.0,  _top], color=:grey30, lw=1.5, ls=:dash, label=false)
-            plt.plot!(p_ws_globe, [0.0, 0.0], [-1.0, -_top], color=:grey30, lw=1.5, ls=:dash, label=false)
+            plt.plot!(p_ws_globe, [0.0, 0.0], [ 1.0,  _top], color=:grey30, lw=1.5, ls=:solid, label=false)
+            plt.plot!(p_ws_globe, [0.0, 0.0], [-1.0, -_top], color=:grey30, lw=1.5, ls=:solid, label=false)
             if cam_el_dyn > 1.0        # north pole faces camera → north interior on top
-                plt.plot!(p_ws_globe, [0.0, 0.0], [_uz, 1.0],  color=:grey30, lw=1.5, ls=:dash, label=false)
+                plt.plot!(p_ws_globe, [0.0, 0.0], [_uz, 1.0],  color=:grey30, lw=1.5, ls=:solid, label=false)
             elseif cam_el_dyn < -1.0   # south pole faces camera → south interior on top
-                plt.plot!(p_ws_globe, [0.0, 0.0], [-_uz, -1.0], color=:grey30, lw=1.5, ls=:dash, label=false)
+                plt.plot!(p_ws_globe, [0.0, 0.0], [-_uz, -1.0], color=:grey30, lw=1.5, ls=:solid, label=false)
             end
         end
         draw_speed_arrows!(p_ws_globe, arr_dyn_x, arr_dyn_y, arr_dyn_u, arr_dyn_v)
@@ -1155,8 +1155,8 @@ for i in 1:iterations
             plt.plot!(p_ws1, gx, gy, color = :grey60, lw = 0.8, label = false)
         end
         plt.plot!(p_ws1, equator1[1], equator1[2], color = :grey30, lw = 1.5, label = false)
-        plt.plot!(p_ws1, axis1_north[1], axis1_north[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
-        plt.plot!(p_ws1, axis1_south[1], axis1_south[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
+        plt.plot!(p_ws1, axis1_north[1], axis1_north[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
+        plt.plot!(p_ws1, axis1_south[1], axis1_south[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
         draw_speed_arrows!(p_ws1, arr1_x, arr1_y, arr1_u, arr1_v)
         for k in 1:N_probes
             pt = project_point_to_screen(probe_lons[k], probe_lats[k], cam_az, cam_el)
@@ -1185,8 +1185,8 @@ for i in 1:iterations
             plt.plot!(p_ws2, gx, gy, color = :grey60, lw = 0.8, label = false)
         end
         plt.plot!(p_ws2, equator2[1], equator2[2], color = :grey30, lw = 1.5, label = false)
-        plt.plot!(p_ws2, axis2_north[1], axis2_north[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
-        plt.plot!(p_ws2, axis2_south[1], axis2_south[2], color = :grey30, lw = 1.5, ls = :dash, label = false)
+        plt.plot!(p_ws2, axis2_north[1], axis2_north[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
+        plt.plot!(p_ws2, axis2_south[1], axis2_south[2], color = :grey30, lw = 1.5, ls = :solid, label = false)
         draw_speed_arrows!(p_ws2, arr2_x, arr2_y, arr2_u, arr2_v)
         for k in 1:N_probes
             pt = project_point_to_screen(probe_lons[k], probe_lats[k], cam_az2, cam_el)

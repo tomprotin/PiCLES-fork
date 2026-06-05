@@ -543,17 +543,26 @@ end
 
 function time_step!_advance(model::Abstract2DParametricModel, Δt::Float64, FailedCollection::Vector{AbstractMarkedParticleInstance})
 
+    temp_CFD = 0
+    temp_no_CFD = 0
+    max_CFL = 0
     @threads for a_particle in model.ParticleCollection[model.ocean_points]
         #@info a_particle.position_ij
         a_particle.ODEIntegrator.t = model.clock.time 
-        mapping_2D.advance!(    a_particle, model.State, FailedCollection,
+        a,b,CFl =mapping_2D.advance!(    a_particle, model.State, FailedCollection,
                                 model.grid, model.winds, Δt,
                                 model.ODEsettings.log_energy_maximum,
                                 model.ODEsettings.wind_min_squared,
                                 model.periodic_boundary,
                                 model.ODEdefaults, model.ODEsettings.log_energy_minimum)
+        temp_CFD += b
+        temp_no_CFD += a
+        if CFl > max_CFL
+            max_CFL = CFl
+        end
         a_particle.ODEIntegrator.t = model.clock.time + Δt
     end
+    @info "Maximum CFL = " * string(round(max_CFL, digits=3))
 end
 
 function time_step!_remesh(model::Abstract2DModel, Δt::Float64)

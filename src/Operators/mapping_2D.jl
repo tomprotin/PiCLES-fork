@@ -28,6 +28,7 @@ using ..core_2D_parametric: Get_u_FromShared as Get_u_FromSharedParam
 using ..core_2D_parametric: ResetParticleValues as ResetParticleValuesParam
 using ..core_2D_parametric: ParticleDefaults as ParticleDefaultsParam
 using ..core_2D_parametric: InitParticleInstance as InitParticleInstanceParam
+using ..core_2D_parametric: get_mesh_size
 
 using ..core_2D: GetParticleEnergyMomentum, GetVariablesAtVertex, ParticleDefaults, InitParticleInstance, Get_u_FromShared, ResetParticleValues
 
@@ -86,30 +87,24 @@ function ParticleToNode!(PI::AbstractParticleInstance, S::StateTypeL1, G::TwoDGr
 end
 
 function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{Float64}, S::StateTypeL1, G::MeshGrids, periodic_boundary::Bool)
-        
-        wind_speed = sqrt(winds[1]^2 + winds[2]^2)
+
+        wind_speed    = sqrt(winds[1]^2 + winds[2]^2)
         particle_speed = sqrt(PI.ODEIntegrator.u[2]^2 + PI.ODEIntegrator.u[3]^2)
+
+        # Resolve physical cell size for any grid type (Cartesian → uniform stats,
+        # Spherical / Tripolar → per-node values stored in G.data).
+        ij        = PI.position_ij isa CartesianIndex ? Tuple(PI.position_ij) : PI.position_ij
+        ij_mesh   = G.data[ij[1], ij[2]]
+        mesh_size = get_mesh_size(G.stats, ij_mesh)
+
         if particle_speed/wind_speed < 0.8 || PI.ODEIntegrator.u[1] < -7.      # TEMPORARY, TO BE CHANGED !!!!!!!
-                #u[4], u[5] are the x and y positions of the particle. For the CartesianGrid2D these are cooridnates relative to the particle node
                 weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
-
-                #ui[1:2] .= PI.position_xy
-
-                u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, [G.stats.dx, G.stats.dy])
-                #@show u_state
-
-                #PIC.push_to_grid!(S, u_state , index_positions,  weights, G.stats.Nx.N, G.stats.Ny.N , periodic_boundary)
+                u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, mesh_size)
                 PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
                 nothing
         else
                 weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
-
-                #ui[1:2] .= PI.position_xy
-                mesh_size = [G.stats.dx, G.stats.dy]
                 u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u, mesh_size)
-                #@show u_state
-
-                #PIC.push_to_grid!(S, u_state , index_positions,  weights, G.stats.Nx.N, G.stats.Ny.N , periodic_boundary)
                 PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
                 nothing
         end
@@ -364,7 +359,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                         periodic_boundary::Bool, 
                         default_particle::PP,
                         log_energy_minimum::Float64,
-                        ) where {PP<:Union{ParticleDefaults,Nothing}}
+                        ) where {PP<:Union{ParticleDefaults,Nothing, Any}}
         #@show PI.position_ij
 
         #if ~PI.boundary # if point is not a 
@@ -393,10 +388,14 @@ function advance!(PI::AbstractParametricParticleInstance,
                 # @info "activated particle ("*string(round(PI.position_xy[1]))*","*string(round(PI.position_xy[2]))*")"
         end
 
+        after = [0,0]
+        max_CFL = 0.0
         # advance particle
         if PI.on #& ~PI.boundary # if Particle is on and not boundary
                 try
                         step!(PI.ODEIntegrator, DT, true)
+                        after = [PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5]]
+                        max_CFL = maximum([after[1], after[2]])
                 catch e
                         @printf "error on advancing ODE:\n"
                         print("- time after fail $(PI.ODEIntegrator.t)\n ")
@@ -481,6 +480,11 @@ function advance!(PI::AbstractParametricParticleInstance,
                 ParticleToNode!(PI, wind, S, Grid, periodic_boundary)
         end
 
+        if after[1] > 1 || after[2] > 1
+                return 1, 0, max_CFL
+        else
+                return 0, 1, max_CFL
+        end
         #return PI
 end
 
@@ -649,7 +653,7 @@ function remesh!(PI::ParametricParticleInstance2D, S::StateTypeL1,
                 ODEs::AbstractODESettings, DT::Float64,
                 grid::GG,
                 minimal_state::Vector{Float64},
-                default_particle::PP) where {PP<:Union{ParticleDefaults,ParticleDefaultsParam,Nothing}, GG<:AbstractGrid}
+                default_particle::PP) where {PP<:Union{ParticleDefaults,Nothing, Any}, GG<:AbstractGrid}
                 
         winds_i::Tuple{Float64,Float64} = winds.u(PI.position_xy[1], PI.position_xy[2], ti), winds.v(PI.position_xy[1], PI.position_xy[2], ti)
         
@@ -898,7 +902,7 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
         wind_min_squared::Float64, 
         default_particle::PP, 
         e_min_log::Number, 
-        DT::Float64,) where {PP<:Union{ParticleDefaults,ParticleDefaultsParam,Nothing}}
+        DT::Float64,) where {PP<:Union{ParticleDefaults,Nothing, Any}}
 
         # load data from shared array
         u_state = Get_u_FromSharedParam(PI, S)

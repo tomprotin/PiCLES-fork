@@ -44,8 +44,8 @@ using LinearAlgebra
 # 1. Parameters
 # =============================================================================
 
-DT      = 60minutes
-t_final = 32days
+DT      = 30minutes
+t_final = 27days
 r_g0    = 0.85
 
 # First swell characteristics
@@ -295,100 +295,104 @@ run!(wave_simulation, cash_store = true)
 # 8. Post-processing
 # =============================================================================
 
-mkpath("plots/test_case_parametric/energy")
-mkpath("plots/test_case_parametric/trajectory")
+post_process = false
 
-lons = grid.data.x[:, 1]   # (Nlon,) longitude vector [°]
-lats = grid.data.y[1, :]   # (Nlat,) latitude vector  [°]
+if post_process
+    mkpath("plots/test_case_parametric/energy")
+    mkpath("plots/test_case_parametric/trajectory")
 
-n_snapshots = length(wave_simulation.store.store)
-time_hours  = collect(1:n_snapshots) .* (DT / 3600.0)
+    lons = grid.data.x[:, 1]   # (Nlon,) longitude vector [°]
+    lats = grid.data.y[1, :]   # (Nlat,) latitude vector  [°]
 
-# Track energy centroid (lon, lat) at each snapshot
-centroid_lon = fill(NaN, n_snapshots)
-centroid_lat = fill(NaN, n_snapshots)
+    n_snapshots = length(wave_simulation.store.store)
+    time_hours  = collect(1:n_snapshots) .* (DT / 3600.0)
 
-for i in 1:n_snapshots
-    fstate = wave_simulation.store.store[i]
-    E      = fstate[:, :, 1]
+    # Track energy centroid (lon, lat) at each snapshot
+    centroid_lon = fill(NaN, n_snapshots)
+    centroid_lat = fill(NaN, n_snapshots)
 
-    # Energy heatmap every 6 snapshots (≈ every 2 hours)
-    if mod(i, 6) == 0
-        E_plot = copy(E)
-        E_plot[wave_model.grid.data.mask .== 0] .= NaN
-        plt.heatmap(
-            lons, lats, transpose(E_plot),
-            title  = "Energy [m²]  t = $(round(time_hours[i], digits=1)) h",
-            xlabel = "Longitude (°)",
-            ylabel = "Latitude (°)",
-            clims  = (0, E_max1),
-            size   = (1200, 500)
-        )
-        plt.savefig("plots/test_case_parametric/energy/energy_$(lpad(i, 4, '0')).png")
+    for i in 1:n_snapshots
+        fstate = wave_simulation.store.store[i]
+        E      = fstate[:, :, 1]
+
+        # Energy heatmap every 6 snapshots (≈ every 2 hours)
+        if mod(i, 6) == 0
+            E_plot = copy(E)
+            E_plot[wave_model.grid.data.mask .== 0] .= NaN
+            plt.heatmap(
+                lons, lats, transpose(E_plot),
+                title  = "Energy [m²]  t = $(round(time_hours[i], digits=1)) h",
+                xlabel = "Longitude (°)",
+                ylabel = "Latitude (°)",
+                clims  = (0, E_max1),
+                size   = (1200, 500)
+            )
+            plt.savefig("plots/test_case_parametric/energy/energy_$(lpad(i, 4, '0')).png")
+        end
+
+        # Energy centroid
+        total_E = sum(E)
+        if total_E > 1e-8
+            centroid_lon[i] = sum(lons  .* E) / total_E
+            centroid_lat[i] = sum(lats' .* E) / total_E
+        end
     end
 
-    # Energy centroid
-    total_E = sum(E)
-    if total_E > 1e-8
-        centroid_lon[i] = sum(lons  .* E) / total_E
-        centroid_lat[i] = sum(lats' .* E) / total_E
-    end
+
+    # ---- Energy centroid trajectory --------------------------------------------
+    # On a sphere, a NE-propagating swell follows a great circle.
+    # On a lat-lon map, this great-circle arc curves northward and then back south.
+    # SphericalPropagationCorrection (tan(lat)/R_earth applied to c_x) drives this.
+
+    valid = .!isnan.(centroid_lon)
+
+    plt.scatter(
+        centroid_lon[valid], centroid_lat[valid],
+        marker_z        = time_hours[valid],
+        zcolor          = time_hours[valid],
+        title           = "Energy centroid trajectory  (colour = time [h])",
+        xlabel          = "Longitude (°)",
+        ylabel          = "Latitude (°)",
+        colorbar_title  = "Time [h]",
+        legend          = false,
+        markersize      = 4,
+        size            = (1000, 600)
+    )
+    # Overlay the expected straight-line diagonal for reference
+    t_span     = range(0, t_final, length=200)
+    gc_lon_ref = @. lon01 + (c_g1 * cos(θ_m1) * t_span) * (180 / π) / R_earth
+    gc_lat_ref = @. lat01 + (c_g1 * sin(θ_m1) * t_span) * (180 / π) / R_earth
+    plt.plot!(gc_lon_ref, gc_lat_ref, lc = :red, ls = :dash, label = "Flat-earth reference")
+    plt.savefig("plots/test_case_parametric/trajectory/centroid_trajectory.png")
+
+    @info "Centroid at final time: lon=$(round(centroid_lon[end], digits=2))°, lat=$(round(centroid_lat[end], digits=2))°"
+
+    # ---- Centroid lon and lat vs time ----------------------------------------
+    plt.plot(
+        time_hours[valid],
+        [centroid_lon[valid]  centroid_lat[valid]],
+        label  = ["Centroid longitude" "Centroid latitude"],
+        title  = "Energy centroid position over time",
+        xlabel = "Time [h]",
+        ylabel = "Degrees",
+        lw     = 2,
+        size   = (900, 500)
+    )
+    plt.savefig("plots/test_case_parametric/trajectory/centroid_vs_time.png")
+
+    # ---- Final energy snapshot ------------------------------------------------
+    E_final = copy(wave_simulation.store.store[end][:, :, 1])
+    E_final[wave_model.grid.data.mask .== 0] .= NaN
+    plt.heatmap(
+        lons, lats, transpose(E_final),
+        title  = "Final energy [m²]  t = $(round(time_hours[end], digits=1)) h",
+        xlabel = "Longitude (°)",
+        ylabel = "Latitude (°)",
+        clims  = (0, E_max1),
+        size   = (1200, 500)
+    )
+    plt.savefig("plots/test_case_parametric/trajectory/final_energy.png")
+
+    @info "All plots saved to plots/test_case_parametric/"
+    @info "Test case complete."
 end
-
-
-# ---- Energy centroid trajectory --------------------------------------------
-# On a sphere, a NE-propagating swell follows a great circle.
-# On a lat-lon map, this great-circle arc curves northward and then back south.
-# SphericalPropagationCorrection (tan(lat)/R_earth applied to c_x) drives this.
-
-valid = .!isnan.(centroid_lon)
-
-plt.scatter(
-    centroid_lon[valid], centroid_lat[valid],
-    marker_z        = time_hours[valid],
-    zcolor          = time_hours[valid],
-    title           = "Energy centroid trajectory  (colour = time [h])",
-    xlabel          = "Longitude (°)",
-    ylabel          = "Latitude (°)",
-    colorbar_title  = "Time [h]",
-    legend          = false,
-    markersize      = 4,
-    size            = (1000, 600)
-)
-# Overlay the expected straight-line diagonal for reference
-t_span     = range(0, t_final, length=200)
-gc_lon_ref = @. lon01 + (c_g1 * cos(θ_m1) * t_span) * (180 / π) / R_earth
-gc_lat_ref = @. lat01 + (c_g1 * sin(θ_m1) * t_span) * (180 / π) / R_earth
-plt.plot!(gc_lon_ref, gc_lat_ref, lc = :red, ls = :dash, label = "Flat-earth reference")
-plt.savefig("plots/test_case_parametric/trajectory/centroid_trajectory.png")
-
-@info "Centroid at final time: lon=$(round(centroid_lon[end], digits=2))°, lat=$(round(centroid_lat[end], digits=2))°"
-
-# ---- Centroid lon and lat vs time ----------------------------------------
-plt.plot(
-    time_hours[valid],
-    [centroid_lon[valid]  centroid_lat[valid]],
-    label  = ["Centroid longitude" "Centroid latitude"],
-    title  = "Energy centroid position over time",
-    xlabel = "Time [h]",
-    ylabel = "Degrees",
-    lw     = 2,
-    size   = (900, 500)
-)
-plt.savefig("plots/test_case_parametric/trajectory/centroid_vs_time.png")
-
-# ---- Final energy snapshot ------------------------------------------------
-E_final = copy(wave_simulation.store.store[end][:, :, 1])
-E_final[wave_model.grid.data.mask .== 0] .= NaN
-plt.heatmap(
-    lons, lats, transpose(E_final),
-    title  = "Final energy [m²]  t = $(round(time_hours[end], digits=1)) h",
-    xlabel = "Longitude (°)",
-    ylabel = "Latitude (°)",
-    clims  = (0, E_max1),
-    size   = (1200, 500)
-)
-plt.savefig("plots/test_case_parametric/trajectory/final_energy.png")
-
-@info "All plots saved to plots/test_case_parametric/"
-@info "Test case complete."
