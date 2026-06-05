@@ -15,7 +15,55 @@ export InitParticleValues
 using ...FetchRelations
 
 using ...Architectures: AbstractParticleInstance, AbstractMarkedParticleInstance, StateTypeL1
-using ...Architectures: AbstractGridStatistics
+using ...Architectures: AbstractGridStatistics, CartesianGridStatistics, SphericalGridStatistics, TripolarGridStatistics
+
+# -----------------------------------------------------------------------
+# get_mesh_size(gridstats, ij_mesh) → Vector{Float64}([dx_metres, dy_metres])
+#
+# Returns the physical cell dimensions in metres for the current grid node.
+#
+# Dispatch logic:
+#   - CartesianGridStatistics: dx and dy are uniform scalars stored in the
+#     stats struct itself (metres).  ij_mesh does not carry dx/dy fields.
+#   - SphericalGridStatistics / TripolarGridStatistics: dx and dy vary with
+#     latitude and are stored per-node in the StructArray.  The ij_mesh
+#     NamedTuple (a row of grid.data) already carries ij_mesh.dx and
+#     ij_mesh.dy in metres.
+#
+# Adding support for a new grid type requires only adding a new method here.
+# -----------------------------------------------------------------------
+
+"""
+    get_mesh_size(gridstats::CartesianGridStatistics, ij_mesh::NamedTuple) → Vector{Float64}
+
+Return the uniform Cartesian cell dimensions [dx, dy] in metres from the
+grid statistics struct.
+"""
+function get_mesh_size(gridstats::CartesianGridStatistics, ij_mesh::NamedTuple)
+    return [gridstats.dx, gridstats.dy]
+end
+
+"""
+    get_mesh_size(gridstats::SphericalGridStatistics, ij_mesh::NamedTuple) → Vector{Float64}
+
+Return the local cell dimensions [dx, dy] in metres from the per-node data
+stored in the spherical grid StructArray row.  On a spherical grid dx varies
+with latitude (dx ∝ cos(lat)), so the uniform degree-based value in gridstats
+cannot be used directly.
+"""
+function get_mesh_size(gridstats::SphericalGridStatistics, ij_mesh::NamedTuple)
+    return [ij_mesh.dx, ij_mesh.dy]
+end
+
+"""
+    get_mesh_size(gridstats::TripolarGridStatistics, ij_mesh::NamedTuple) → Vector{Float64}
+
+Return the local cell dimensions [dx, dy] in metres from the per-node data
+stored in the tripolar grid StructArray row.
+"""
+function get_mesh_size(gridstats::TripolarGridStatistics, ij_mesh::NamedTuple)
+    return [ij_mesh.dx, ij_mesh.dy]
+end
 
 
 # using ..particle_waves_v3: init_vars
@@ -131,17 +179,30 @@ function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}) wher
         ui_c_2 = local_mean_speed_gaussian_2D([dx, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
         ui_c_3 = local_mean_speed_gaussian_2D([0, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
         ui_c_4 = local_mean_speed_gaussian_2D([dx, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # @info "dx: $dx, dy: $dy"
+        # @info "x: $x, y: $y"
+        # @info "ui_c̄_x: $ui_c̄_x, ui_c̄_y: $ui_c̄_y"
+        # @info "ui_M: $ui_M"
+        # @info "ui_c_1: $ui_c_1"
+        # @info "ui_c_2: $ui_c_2"
+        # @info "ui_c_3: $ui_c_3"
+        # @info "ui_c_4: $ui_c_4"
+        # @info ""
+
+        c1_speed = speed(ui_c_1[1], ui_c_1[2])
+        c2_speed = speed(ui_c_2[1], ui_c_2[2])
+        c3_speed = speed(ui_c_3[1], ui_c_3[2])
+        c4_speed = speed(ui_c_4[1], ui_c_4[2])
 
         ui_e = exp(ui_lne)
-        c_speed = speed(ui_c̄_x, ui_c̄_y)
-        m_x1 = ui_c_1[1] * ui_e / c_speed^2 / 2
-        m_x2 = ui_c_2[1] * ui_e / c_speed^2 / 2
-        m_x3 = ui_c_3[1] * ui_e / c_speed^2 / 2
-        m_x4 = ui_c_4[1] * ui_e / c_speed^2 / 2
-        m_y1 = ui_c_1[2] * ui_e / c_speed^2 / 2
-        m_y2 = ui_c_2[2] * ui_e / c_speed^2 / 2
-        m_y3 = ui_c_3[2] * ui_e / c_speed^2 / 2
-        m_y4 = ui_c_4[2] * ui_e / c_speed^2 / 2
+        m_x1 = ui_c_1[1] * ui_e / c1_speed^2 / 2
+        m_x2 = ui_c_2[1] * ui_e / c2_speed^2 / 2
+        m_x3 = ui_c_3[1] * ui_e / c3_speed^2 / 2
+        m_x4 = ui_c_4[1] * ui_e / c4_speed^2 / 2
+        m_y1 = ui_c_1[2] * ui_e / c1_speed^2 / 2
+        m_y2 = ui_c_2[2] * ui_e / c2_speed^2 / 2
+        m_y3 = ui_c_3[2] * ui_e / c3_speed^2 / 2
+        m_y4 = ui_c_4[2] * ui_e / c4_speed^2 / 2
 
 
         ui_M_C1 = local_cov_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
@@ -168,10 +229,10 @@ function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}) wher
                       0 0 1 0;
                       0 0 0 1
         ]
-        m_Mxk1 = final_ui_M1 * ui_e / c_speed^2 / 2
-        m_Mxk2 = final_ui_M2 * ui_e / c_speed^2 / 2
-        m_Mxk3 = final_ui_M3 * ui_e / c_speed^2 / 2
-        m_Mxk4 = final_ui_M4 * ui_e / c_speed^2 / 2
+        m_Mxk1 = final_ui_M1 * ui_e / c1_speed^2 / 2
+        m_Mxk2 = final_ui_M2 * ui_e / c2_speed^2 / 2
+        m_Mxk3 = final_ui_M3 * ui_e / c3_speed^2 / 2
+        m_Mxk4 = final_ui_M4 * ui_e / c4_speed^2 / 2
 
         return ui_e, [m_x1, m_y1], [m_x2, m_y2], [m_x3, m_y3], [m_x4, m_y4], m_Mxk1, m_Mxk2, m_Mxk3, m_Mxk4
 end
@@ -564,7 +625,8 @@ function SeedParticle(
 
         # define initial condition
         # particle initial condition is always (0,0) in relative coordinates not xy anymore
-        z_i, particle_on = InitParticleValues(particle_defaults, [gridstats.dx, gridstats.dy], (0.0, 0.0) , ij_wind, DT)
+        mesh_size = get_mesh_size(gridstats, ij_mesh)
+        z_i, particle_on = InitParticleValues(particle_defaults, mesh_size, (0.0, 0.0) , ij_wind, DT)
 
         # check if point is boundary point <-- replace in the future with with mask: 0 = land, 1 = ocean, 2= land boundary, 3 = domain boundary
         # boundary_point = check_boundary_point(ij, boundary, periodic_boundary) # old version that compares to list 
@@ -572,7 +634,7 @@ function SeedParticle(
 
         # add initial state to State vector
         if particle_on
-                init_z0_to_State!(State, ij, GetParticleEnergyMomentum(z_i, [gridstats.dx, gridstats.dy]))
+                init_z0_to_State!(State, ij, GetParticleEnergyMomentum(z_i, mesh_size))
         end
 
         # check if Propgation Correction is set in gridstats

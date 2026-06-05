@@ -385,7 +385,7 @@ function time_step!(model::Abstract2DParametricModel, Δt::Float64; callbacks=no
         mapping_2D.remesh!(a_particle, model.State, 
                         model.winds, model.clock.time, 
                         model.ODEsettings, Δt,
-                        model.grid.stats, 
+                        model.grid, 
                         model.minimal_state,
                         model.ODEdefaults)
     end
@@ -402,67 +402,67 @@ function time_step!(model::Abstract2DParametricModel, Δt::Float64; callbacks=no
     # @printf("------- max state E=%.4e cgx=%.4e cgy=%.4e \n", max_energy(model), max_cgx(model), max_cgy(model))
     tick!(model.clock, Δt)
 
-    frame_size = (1220, 1080)
-    fstate = model.State
-    # plot_particle_collection(fstate, model.grid)
-    # sm2 = model.State[:, :, 3]
-    energy = sum(fstate[:,:,1])
-    p1 = plt.heatmap(model.grid.data.x[:,1], model.grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=frame_size)
-    # p1 = plt.heatmap(p, transpose(sm2), subplot=6, title="State: y momentum ")
-    moment_amp= sqrt.(fstate[:,:,2].^2 + fstate[:,:,3].^2)
-    c_x = fstate[:,:,2] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
-    c_y = fstate[:,:,3] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
-    for k in 1:model.grid.stats.Nx.N, l in 1:model.grid.stats.Ny.N
-        if isnan(c_x[k,l])
-        c_x[k,l] = 0.0
-        end
-        if isnan(c_y[k,l])
-        c_y[k,l] = 0.0
-        end
-    end
+    # frame_size = (1220, 1080)
+    # fstate = model.State
+    # # plot_particle_collection(fstate, model.grid)
+    # # sm2 = model.State[:, :, 3]
+    # energy = sum(fstate[:,:,1])
+    # p1 = plt.heatmap(model.grid.data.x[:,1], model.grid.data.y[1,:], transpose(fstate[:, :, 1]), aspect_ratio=:equal, size=frame_size)
+    # # p1 = plt.heatmap(p, transpose(sm2), subplot=6, title="State: y momentum ")
+    # moment_amp= sqrt.(fstate[:,:,2].^2 + fstate[:,:,3].^2)
+    # c_x = fstate[:,:,2] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
+    # c_y = fstate[:,:,3] .* fstate[:,:,1] ./ (2 * moment_amp.^2)
+    # for k in 1:model.grid.stats.Nx.N, l in 1:model.grid.stats.Ny.N
+    #     if isnan(c_x[k,l])
+    #     c_x[k,l] = 0.0
+    #     end
+    #     if isnan(c_y[k,l])
+    #     c_y[k,l] = 0.0
+    #     end
+    # end
 
-    max_speed = round(maximum((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2))), digits=4)
-    max_speed_position = argmax((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2)))
-    max_energy = maximum([fstate[j,k,1] for j in 1:model.grid.stats.Nx.N for k in 1:model.grid.stats.Ny.N])
-    nArrowsX = 20
-    nArrowsY = 20
-    xmin = 0.
-    ymin = 0.
-    xmax = model.grid.stats.xmax
-    ymax = model.grid.stats.ymax
-    xlim = (xmin+(xmax-xmin)/(nArrowsX+2), xmax-(xmax-xmin)/(nArrowsX+2))
-    ylim = (ymin+(ymax-ymin)/(nArrowsY+2), ymax-(ymax-ymin)/(nArrowsY+2))
-    xs = range(xlim...; length=nArrowsX)
-    ys = range(ylim...; length=nArrowsY)
-    X, Y = reim(complex.(xs', ys))
-    Ux = zeros(nArrowsX, nArrowsY)
-    Uy = zeros(nArrowsX, nArrowsY)
-    for i in 1:(length(xs))
-        for j in 1:(length(ys))
-            Ux[i,j] = interp(xs[i], ys[j], c_x', model.grid.data.x, model.grid.data.y)
-            Uy[i,j] = interp(xs[i], ys[j], c_y', model.grid.data.x, model.grid.data.y)
-        end
-    end
-    scalefactor = (xs[2]-xs[1])/2 /maximum(Ux)
-    Ux = scalefactor .* Ux
-    Uy = scalefactor .* Uy
+    # max_speed = round(maximum((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2))), digits=4)
+    # max_speed_position = argmax((sqrt.((c_x.*(fstate[:,:,1].>1e-6)).^2 + (c_y.*(fstate[:,:,1].>1e-6)).^2)))
+    # max_energy = maximum([fstate[j,k,1] for j in 1:model.grid.stats.Nx.N for k in 1:model.grid.stats.Ny.N])
+    # nArrowsX = 20
+    # nArrowsY = 20
+    # xmin = 0.
+    # ymin = 0.
+    # xmax = model.grid.stats.xmax
+    # ymax = model.grid.stats.ymax
+    # xlim = (xmin+(xmax-xmin)/(nArrowsX+2), xmax-(xmax-xmin)/(nArrowsX+2))
+    # ylim = (ymin+(ymax-ymin)/(nArrowsY+2), ymax-(ymax-ymin)/(nArrowsY+2))
+    # xs = range(xlim...; length=nArrowsX)
+    # ys = range(ylim...; length=nArrowsY)
+    # X, Y = reim(complex.(xs', ys))
+    # Ux = zeros(nArrowsX, nArrowsY)
+    # Uy = zeros(nArrowsX, nArrowsY)
+    # for i in 1:(length(xs))
+    #     for j in 1:(length(ys))
+    #         Ux[i,j] = interp(xs[i], ys[j], c_x', model.grid.data.x, model.grid.data.y)
+    #         Uy[i,j] = interp(xs[i], ys[j], c_y', model.grid.data.x, model.grid.data.y)
+    #     end
+    # end
+    # scalefactor = (xs[2]-xs[1])/2 /maximum(Ux)
+    # Ux = scalefactor .* Ux
+    # Uy = scalefactor .* Uy
 
-    plt.plot!(legend=:none,
-                    title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(max_speed_position[1])*","*string(max_speed_position[2])*")",
-                    ylabel="y position",
-                    xlabel="x position",
-                    xlims=(model.grid.stats.xmin, model.grid.stats.xmax),
-                    ylims=(model.grid.stats.ymin, model.grid.stats.ymax)
-                    ,clim=(0.0,max_energy*0.5)
-    )
-    plt.quiver!(X, Y; quiver=(Ux, Uy), color=:cyan)
+    # plt.plot!(legend=:none,
+    #                 title="total energy = "*string(round(energy,digits=3))*"; max_speed = "*string(max_speed)*"; pos = ("*string(max_speed_position[1])*","*string(max_speed_position[2])*")",
+    #                 ylabel="y position",
+    #                 xlabel="x position",
+    #                 xlims=(model.grid.stats.xmin, model.grid.stats.xmax),
+    #                 ylims=(model.grid.stats.ymin, model.grid.stats.ymax)
+    #                 ,clim=(0.0,max_energy*0.5)
+    # )
+    # plt.quiver!(X, Y; quiver=(Ux, Uy), color=:cyan)
 
 
-    pos_x = model.grid.stats.xmin + (max_speed_position[1] - 1) * model.grid.stats.dx
-    pos_y = model.grid.stats.ymin + (max_speed_position[2] - 1) * model.grid.stats.dy
-    plt.scatter!([pos_x], [pos_y], color=:red, markersize=5)
+    # pos_x = model.grid.stats.xmin + (max_speed_position[1] - 1) * model.grid.stats.dx
+    # pos_y = model.grid.stats.ymin + (max_speed_position[2] - 1) * model.grid.stats.dy
+    # plt.scatter!([pos_x], [pos_y], color=:red, markersize=5)
 
-    plt.savefig(p1, "plots/test_case_parametric/heatmaps/"*string(model.clock.iteration)*".png")
+    # plt.savefig(p1, "plots/test_case_parametric/heatmaps/"*string(model.clock.iteration)*".png")
     
 
 
@@ -507,7 +507,7 @@ function time_step!(model::Abstract2DModel, Δt::Float64; callbacks=nothing, deb
         mapping_2D.remesh!(a_particle, model.State, 
                         model.winds, model.clock.time, 
                         model.ODEsettings, Δt,
-                        model.grid.stats, 
+                        model.grid, 
                         model.minimal_state,
                         model.ODEdefaults)
     end

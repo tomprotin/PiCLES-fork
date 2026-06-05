@@ -226,15 +226,10 @@ end
 
 
 function ProjetionKernel(Gi::NamedTuple, stats::TwoDSphericalGridStatistics)
-    
-    cos_lat = cos.(Gi.dy * pi / 180)
-    # R = 6371.0e3 #meters
-
-    # in normalized degree lon/latitude
-    return SMatrix{2,2}([ 
-        1/(cos_lat * Gi.dx) 0;
-        0              1/Gi.dy
-                        ])
+    # Gi.dx and Gi.dy are physical cell sizes in metres (Gi.dx already embeds
+    # the cos(lat) correction from cal_dx_meters), so the projection is the
+    # same form as for Cartesian: velocity [m/s] → cell-fraction rate [cells/s].
+    return SMatrix{2,2}([1/Gi.dx 0; 0 1/Gi.dy])
 end
 
 

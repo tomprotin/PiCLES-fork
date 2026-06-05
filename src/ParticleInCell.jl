@@ -635,6 +635,7 @@ function push_to_grid!(grid::StateTypeL1,
     end
 end
 
+# ----- Parametric push_to_grid -----
 function push_to_grid!(grid::StateTypeL1,
     charge::CC,
     wni::FieldVector,

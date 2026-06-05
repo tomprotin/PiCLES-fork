@@ -94,9 +94,15 @@ function unfold(M::Matrix{Float64})
         return M[1,1], M[1,2], M[2,2], M[1,3], M[2,3], M[1,4], M[2,4], M[3,3], M[3,4], M[4,4]
 end
 
+function write_particles_to_csv(wave_model::Abstract2DModel)
+        #not implemented yet
+end
+
 function write_particles_to_csv(wave_model::Abstract2DParametricModel)
         iteration = wave_model.clock.iteration
         save_path = "plots/test_case_parametric/data"
+        mkpath(save_path * "/particles")
+        mkpath(save_path * "/mesh_values")
 
         nParticles = wave_model.grid.stats.Nx.N * wave_model.grid.stats.Ny.N
 
@@ -118,6 +124,7 @@ function write_particles_to_csv(wave_model::Abstract2DParametricModel)
         M9 = zeros(nParticles)
         M10 = zeros(nParticles)
         for i in 1:nParticles
+                isnothing(parts[i].ODEIntegrator) && continue   # land cell — leave as zeros
                 logE[i] = parts[i].ODEIntegrator[1]
                 cx[i] = parts[i].ODEIntegrator[2]
                 cy[i] = parts[i].ODEIntegrator[3]
@@ -518,7 +525,7 @@ function init_particles!(model::Abstract2DModel; defaults::PP=nothing, verbose::
         nothing
 end
 
-function init_particles!(model::Abstract2DParametricModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,StochasticParticleDefaults2D,Nothing}}
+function init_particles!(model::Abstract2DParametricModel; defaults::PP=nothing, verbose::Bool=false) where {PP<:Union{ParticleDefaults1D,StochasticParticleDefaults2D,Nothing,Any}}
         #defaults        = isnothing(defaults) ? model.ODEdev : defaults
         if verbose
                 @info "seed PiCLES ... \n"

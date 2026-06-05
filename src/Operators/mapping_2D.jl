@@ -383,6 +383,11 @@ function advance!(PI::AbstractParametricParticleInstance,
                 @info "advance: no grid detected"
         end
 
+        # Resolve physical cell size correctly for Cartesian and Spherical grids
+        ij = PI.position_ij isa CartesianIndex ? Tuple(PI.position_ij) : PI.position_ij
+        ij_mesh = Grid.data[ij[1], ij[2]]
+        mesh_size = get_mesh_size(Grid.stats, ij_mesh)
+
         if ~PI.on && PI.ODEIntegrator.u[1] >= log_energy_minimum + log(100)
                 PI.on = true
                 # @info "activated particle ("*string(round(PI.position_xy[1]))*","*string(round(PI.position_xy[2]))*")"
@@ -421,7 +426,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                 # test if winds where strong enough
                 if speed_square(wind_end[1], wind_end[2]) >= wind_min_squared
                         # winds are large eneough, reinit
-                        ui = ResetParticleValuesParam(default_particle, [Grid.dx, Grid.dy], xy, wind_end, DT)
+                        ui = ResetParticleValuesParam(default_particle, mesh_size, xy, wind_end, DT)
                         reset_PI_u!(PI, ui =ui)
                         PI.on = true
                 end
@@ -446,7 +451,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                         winds.v(PI.position_xy[1], PI.position_xy[2], t_end)))::Tuple{Float64,Float64}
                 @show winds_start
 
-                ui = ResetParticleValuesParam(default_particle, [Grid.dx, Grid.dy], xy, winds_start, DT)
+                ui = ResetParticleValuesParam(default_particle, mesh_size, xy, winds_start, DT)
                 @show PI.ODEIntegrator.u
                 reset_PI_u!(PI, ui=ui)
 
@@ -458,20 +463,14 @@ function advance!(PI::AbstractParametricParticleInstance,
                                         (winds.u(PI.position_xy[1], PI.position_xy[2], t_start),
                                         winds.v(PI.position_xy[1], PI.position_xy[2], t_start)))::Tuple{Float64,Float64}
 
-                ui = ResetParticleValuesParam(default_particle, [Grid.dx, Grid.dy], xy, winds_start, DT)
+                ui = ResetParticleValuesParam(default_particle, mesh_size, xy, winds_start, DT)
                 reset_PI_u!(PI, ui=ui)
 
         elseif PI.ODEIntegrator.u[1] > log_energy_maximum
                 @info "e_max_log is reached"
-                #@show PI
-
-                # winds_start = convert(Tuple{Float64,Float64},
-                #                         (winds.u(PI.position_xy[1], PI.position_xy[2], t_start),
-                #                         winds.v(PI.position_xy[1], PI.position_xy[2], t_start)))::Tuple{Float64,Float64}
 
                 ui = PI.ODEIntegrator.u
                 ui[1] = log_energy_maximum
-                # ui = Param(default_particle, xy, winds_start, DT)
                 reset_PI_u!(PI, ui=ui)
 
         end
@@ -648,15 +647,20 @@ function remesh!(PI::ParametricParticleInstance2D, S::StateTypeL1,
                 winds::NamedTuple{(:u, :v)}, 
                 ti::Number, 
                 ODEs::AbstractODESettings, DT::Float64,
-                grid_stats::AbstractGridStatistics,
+                grid::GG,
                 minimal_state::Vector{Float64},
-                default_particle::PP) where {PP<:Union{ParticleDefaults,Nothing}}        
+                default_particle::PP) where {PP<:Union{ParticleDefaults,ParticleDefaultsParam,Nothing}, GG<:AbstractGrid}
                 
         winds_i::Tuple{Float64,Float64} = winds.u(PI.position_xy[1], PI.position_xy[2], ti), winds.v(PI.position_xy[1], PI.position_xy[2], ti)
         
+        # Look up the local per-node grid data (carries dx/dy in metres for spherical grids)
+        ij = PI.position_ij isa CartesianIndex ? Tuple(PI.position_ij) : PI.position_ij
+        ij_mesh = grid.data[ij[1], ij[2]]
+
         NodeToParticle!(PI, S, 
                         winds_i, 
-                        grid_stats,
+                        grid.stats,
+                        ij_mesh,
                         minimal_state,
                         ODEs.wind_min_squared,
                         default_particle, 
@@ -889,11 +893,12 @@ end
 function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
         wind_tuple::Tuple{Float64,Float64}, 
         grid_stats::MeshGridStatistics,
+        ij_mesh::NamedTuple,
         minimal_state::Vector{Float64},
         wind_min_squared::Float64, 
         default_particle::PP, 
         e_min_log::Number, 
-        DT::Float64,) where {PP<:Union{ParticleDefaults,Nothing}}
+        DT::Float64,) where {PP<:Union{ParticleDefaults,ParticleDefaultsParam,Nothing}}
 
         # load data from shared array
         u_state = Get_u_FromSharedParam(PI, S)
@@ -911,6 +916,9 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
         end
 
         last_t = PI.ODEIntegrator.t
+        # Resolve physical cell size correctly for both Cartesian and Spherical grids
+        mesh_size = get_mesh_size(grid_stats, ij_mesh)
+
         # minimal_state[1] is the minmal Energy  
         # minimal_state[2] is the minmal momentum squared  
         if ~PI.boundary & (u_state[1] >= minimal_state[1]) & (speed_square(u_state[2], u_state[3]) >= minimal_state[2]) # all integrior nodes: convert note to particle values and push to ODEIntegrator
@@ -918,29 +926,14 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
                 #@show "u_state", u_state
                 ui = GetVariablesAtVertexParam(u_state, xy[1], xy[2])
                 #@info exp(ui[1]), ui[2], ui[4]/1e3, ui[5]/1e3
-                mesh_size = [grid_stats.dx, grid_stats.dy]
                 reset_PI_ut!(PI, mesh_size; ui=ui, ti=last_t, stochas=false)
                 PI.on = true
-
-                # this method is more robust than the set_u! method (~february 2023)
-                # reinit!(PI.ODEIntegrator, ui, erase_sol=false, reset_dt=true, reinit_cache=true)#, reinit_callbacks=true)
-                # set_t!(PI.ODEIntegrator, last_t )
-                # u_modified!(PI.ODEIntegrator,true)
-                # auto_dt_reset!(PI.ODEIntegrator)
-
-                # # this method is more robust than the set_u! method
-                # reinit!(PI.ODEIntegrator, ui, erase_sol=false, reset_dt=true, reinit_cache=true)#, reinit_callbacks=true)
-                # #set_u!(PI.ODEIntegrator, ui )
-                # #set_t!(PI.ODEIntegrator, last_t )
-                # u_modified!(PI.ODEIntegrator,true)
-
-                #@show PI.ODEIntegrator.t, PI.ODEIntegrator.u
                 
         elseif ~PI.boundary & (speed_square(wind_tuple[1], wind_tuple[2]) >= wind_min_squared) #minimal windsea is not big enough but local winds are strong enough  #(u_state[1] < exp(e_min_log)) | PI.boundary
                 # test if particle is below energy threshold, or
                 #      if particle is at the boundary
 
-                ui = ResetParticleValuesParam(default_particle, [grid_stats.dx, grid_stats.dy], xy, wind_tuple, DT) # returns winds sea given DT and winds
+                ui = ResetParticleValuesParam(default_particle, mesh_size, xy, wind_tuple, DT) # returns winds sea given DT and winds
                 reinit!(PI.ODEIntegrator, ui, erase_sol=false, reset_dt=true, reinit_cache=true)#, reinit_callbacks=true)
                 reset_PI_t!(PI, ti=last_t)
 
@@ -948,7 +941,7 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
 
         elseif PI.boundary & (speed_square(wind_tuple[1], wind_tuple[2]) >= wind_min_squared) # at the boundary, reset particle if winds are strong enough
 
-                ui = ResetParticleValuesParam(default_particle, [grid_stats.dx, grid_stats.dy], xy, wind_tuple, DT) # returns winds sea given DT and winds
+                ui = ResetParticleValuesParam(default_particle, mesh_size, xy, wind_tuple, DT) # returns winds sea given DT and winds
                 reinit!(PI.ODEIntegrator, ui, erase_sol=false, reset_dt=true, reinit_cache=true)#, reinit_callbacks=true)
                 reset_PI_t!(PI, ti=last_t)
                 # @info default_particle, ui
@@ -957,7 +950,6 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
  
         elseif (u_state[1] >= minimal_state[1]) # "Swell case" where energy is above threshold, not enough wind, whether boundary or not
                 ui = GetVariablesAtVertexParam(u_state, xy[1], xy[2])
-                mesh_size = [grid_stats.dx, grid_stats.dy]
                 reset_PI_ut!(PI, mesh_size; ui=ui, ti=last_t, stochas=false)
                 PI.on = true
         else # particle is below energy threshold & wind is below threshold 
@@ -972,13 +964,12 @@ function NodeToParticle!(PI::AbstractParametricParticleInstance, S::StateTypeL1,
                 u_state[2] = m_cx
                 u_state[3] = m_cy
                 ui = GetVariablesAtVertexParam(u_state, xy[1], xy[2])
-                mesh_size = [grid_stats.dx, grid_stats.dy]
                 reset_PI_ut!(PI, mesh_size; ui=ui, ti=last_t, stochas=false)
 
                 PI.on = false
         end
 
-        if PI.on && PI.ODEIntegrator.u[1] < e_min_log + log(100) && (speed_square(wind_tuple[1], wind_tuple[2]) < wind_min_squared)
+        if PI.on && PI.ODEIntegrator.u[1] < e_min_log + log(10) && (speed_square(wind_tuple[1], wind_tuple[2]) < wind_min_squared)
                 PI.on = false
                 PI.ODEIntegrator.u[1] = e_min_log
         end

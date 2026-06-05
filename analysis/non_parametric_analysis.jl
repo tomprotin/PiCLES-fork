@@ -160,20 +160,20 @@ for i in 1:iterations
                 ylims=(ymin, ymax)
                 ,clim=(0.0,max_energy*scale_factor[i])
   )
-  plt.quiver!(X, Y; quiver=(Ux, Uy), color=:cyan)
+  # plt.quiver!(X, Y; quiver=(Ux, Uy), color=:cyan)
 
-  p2 = plt.plot(times[1:(end-1)] ./3600, energies,label=false
+  p2 = plt.plot(times[1:(end-1)] ./3600, [energies, ones(length(energies)).*energies[1]],label=false
                 ,xlims=(times[1]/3600,times[end]/3600)
-                ,ylims=(0,1.1*max_total_energy)
-                ,linewidth=1
-                ,ls=:dot
-                ,color="#ef8b8b"
+                ,ylims=(0,1.5*max_total_energy)
+                ,linewidth=[1 2]
+                ,ls=[:dot :solid]
+                ,color=["#ef8b8b" :purple]
   )
 
   plt.plot!(times[1:i] ./3600, [energies[1:i], energies[1:i]],label=false
                 ,ylabel="total energy in the domain"
                 ,xlims=(times[1]/3600,times[end]/3600)
-                ,ylims=(0,1.1*max_total_energy)
+                ,ylims=(0,1.5*max_total_energy)
                 ,linewidth=[3 3]
                 ,ls=[:solid :dot]
                 ,color=[:white "#c13030"]
@@ -184,38 +184,38 @@ for i in 1:iterations
                 ,ylabel="speed (m/s)"
                 ,xlabel="time (hours)"
                 ,xlims=(times[1]/3600,times[end]/3600)
-                ,ylims=(0,1.1*maximum(winds))
+                ,ylims=(0,1.3*max(maximum(winds), maximum(max_speeds)))
                 ,linewidth=[3 3]
                 ,ls=:solid
                 ,color=["#ffcf9c" "#6ac969"]
   )
 
-  plt.plot!(plt.twinx(), times[1:i] ./3600, [winds[1:i], max_speeds[1:i], NaN.*times[1:i]]
-                ,label=["winds speed (m/s)" "wave velocity (m/s)" "energy"]
+  plt.plot!(plt.twinx(), times[1:i] ./3600, [winds[1:i], max_speeds[1:i], NaN.*times[1:i], NaN.*times[1:i]]
+                ,label=["winds speed (m/s)" "wave velocity (m/s)" "energy" "theoretical energy"]
                 ,ylabel="speed (m/s)"
                 ,xlims=(times[1]/3600,times[end]/3600)
-                ,ylims=(0,1.1*maximum(winds))
-                ,linewidth=[5 5 3]
-                ,ls=[:solid :solid :dot]
-                ,color=["#ff8300" "#31a030" "#c13030"]
+                ,ylims=(0,1.3*max(maximum(winds), maximum(max_speeds)))
+                ,linewidth=[5 5 3 2]
+                ,ls=[:solid :solid :dot :solid]
+                ,color=["#ff8300" "#31a030" "#c13030" :purple]
   )
 
-  p3 = plt.plot(data_x, [sqrt.(c_x[j,j].^2+c_y[j,j]^2) for j in 1:Nx],legend=false
-                # ,size=(frame_size[1],frame_size[2]-200)
-                ,title="Wave velocity along the y=x line"
-                ,label="wave velocity (m/s)"
-                ,ylabel="speed (m/s)"
-                ,xlabel="distance (m)"
-                ,ylims=(0,5)
-                ,linewidth=5
-                ,color="blue"
-  )
+  # p3 = plt.plot(data_x, [sqrt.(c_x[j,j].^2+c_y[j,j]^2) for j in 1:Nx],legend=false
+  #               # ,size=(frame_size[1],frame_size[2]-200)
+  #               ,title="Wave velocity along the y=x line"
+  #               ,label="wave velocity (m/s)"
+  #               ,ylabel="speed (m/s)"
+  #               ,xlabel="distance (m)"
+  #               ,ylims=(0,5)
+  #               ,linewidth=5
+  #               ,color="blue"
+  # )
 
   l1 = @plt.layout [a{0.5h}; b{0.5h}]
   l = @plt.layout [a{0.35w} b{0.7w}]
-  p_temp = plt.plot(p2,p3, layout=l1, margin=15plt.mm,top_margin=5plt.mm,
-     bottom_margin=5plt.mm)
-  p_final = plt.plot(p_temp, p1, layout=l, size=frame_size
+  # p_temp = plt.plot(p2,p3, layout=l1, margin=15plt.mm,top_margin=5plt.mm,
+  #    bottom_margin=5plt.mm)
+  p_final = plt.plot(p2, p1, layout=l, size=frame_size
                 ,margin=15plt.mm
   )
 
