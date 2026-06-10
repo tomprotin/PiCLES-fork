@@ -27,8 +27,8 @@ focus_globe = true
 # --- Probe locations for 2D wave spectra ---
 # The last probe is dynamic: its position is overridden every frame to follow
 # the peak ocean energy cell (its initial value here is ignored).
-probe_lons   = [45.0, 115.0, 165.0, -145.0]   # °E
-probe_lats   = [ -30.0,  -50.0,  -35.0,   10.0]   # °N  (last entry ignored)
+probe_lons   = [45.0, 165.0, 325.0, 115.0]   # °E
+probe_lats   = [ -30.0,  -35.0,   10.0,  -50.0]   # °N  (last entry ignored)
 probe_colors = [:cyan, :lime, :magenta, :coral]
 
 # --- Wave-speed arrows ---
@@ -40,7 +40,7 @@ N_spec     = 80
 spec_cgrad = plt.cgrad(:plasma)
 
 # --- Thresholds (as fraction of global max) ---
-E_threshold_ws_frac = 0.0001   # cells below max_energy * frac are masked
+E_threshold_ws_frac = 0.001   # cells below max_energy * frac are masked
 spec_c_max_frac     = 1.4      # spectrum velocity axis = max_ws_global * frac
 
 # --- Histogram ---
@@ -969,7 +969,7 @@ for j in 1:iterations
     end
     global max_hist_val = max(max_hist_val, maximum(h))
 end
-max_hist_val *= 0.5   # add some headroom above the tallest bin
+max_hist_val *= 0.3   # add some headroom above the tallest bin
 
 # Two independent row layouts combined via ffmpeg vstack
 l_top = focus_globe ?

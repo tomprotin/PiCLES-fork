@@ -45,13 +45,13 @@ using LinearAlgebra
 # =============================================================================
 
 DT      = 30minutes
-t_final = 27days
+t_final = 30days
 r_g0    = 0.85
 
 # First swell characteristics
 fp1    = 0.071                    # peak frequency [Hz], period ≈ 14 s
 c_g1   = 9.81 / (4π * fp1)        # deep-water group speed ≈ 11 m/s
-θ_m1   = -45 / 180 * π             # propagation direction: 45° NE from east
+θ_m1   = -57.5 / 180 * π             # propagation direction: 45° NE from east
 β      = 20.0 / 180 * π           # directional half-width [rad] — narrow swell beam
 σ_along = 0.75                    # speed spread in the direction along the swell beam [m/s]
 
@@ -80,8 +80,8 @@ Hs_max2 = second_swell*4.0                     # peak significant wave height [m
 E_max2  = second_swell*Hs_max2^2 / 16           # peak wave energy [m²]
 
 # First initial swell patch centre (degrees)
-lon01   = 45.0
-lat01   = -30.0
+lon01   = 160.0
+lat01   = 45.0
 σ_lon1  = 1.5                    # Gaussian half-width in longitude [°]
 σ_lat1  = 1.5                    # Gaussian half-width in latitude  [°]
 
@@ -96,8 +96,8 @@ U10_ref = 5.0
 V10_ref = 5.0
 
 # Grid
-lon_min, lon_max, Nlon = 0.0, 360.0, 361
-lat_min, lat_max, Nlat = -80.0,  80.0, 161
+lon_min, lon_max, Nlon = 0.0, 360.0, 505
+lat_min, lat_max, Nlat = -80.0,  80.0, 225
 
 
 # =============================================================================
