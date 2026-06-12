@@ -141,7 +141,7 @@ function compute_weights_and_index_mininal(g_pars::TwoDCartesianGridMesh, xp::Fl
 end
 
 """
-compute_weights_and_index_mininal(xp::Float64, yp:: Float64 )
+compute_weights_and_index_mininal_CIC(xp::Float64, yp:: Float64 )
 returns indexes and weights as FieldVector for in 2D for single x,y point
     returned indexes are in absolute coordindates to the particle node, calculated from :
     inputs:
@@ -156,6 +156,29 @@ function compute_weights_and_index_mininal(ij::II, xp::Float64, yp::Float64) whe
     yi, yw = get_absolute_i_and_w(yp, ij[2])
 
     return wni(xi, xw, yi, yw)
+end
+
+function gaussian_kernel(xp::Float64, yp::Float64, cov_x::Float64, cov_y::Float64, cov_xy::Float64)
+    # calculate the Gaussian kernel value for the given position and covariance
+    exponent = -0.5 * (xp^2 / cov_x + yp^2 / cov_y + 2 * xp * yp * cov_xy / (cov_x * cov_y))
+    return exp(exponent)
+end
+
+function compute_weights_and_index_mininal_EXP(ij::II, xp::Float64, yp::Float64, cov_x::Float64, cov_y::Float64, cov_xy::Float64, dx::Float64, dy::Float64) where {II<:Union{Tuple{Int,Int},CartesianIndex}}
+
+    """
+    2d wrapper for 1d function
+    """
+    xi, xw = get_absolute_i_and_w(xp, ij[1])
+    yi, yw = get_absolute_i_and_w(yp, ij[2])
+
+    xi = [xi[1]-1, xi[1], xi[2], xi[2]+1]
+    yi = [yi[1]-1, yi[1], yi[2], yi[2]+1]
+
+    w = [gaussian_kernel((xp-floor(xp) + xi[2] - xi[i]) * dx, (yp-floor(yp) + yi[2] - yi[j]) * dy, cov_x, cov_y, cov_xy) for i in 1:4, j in 1:4]
+    w = w / sum(w)
+
+    return xi, yi, w
 end
 
 """
@@ -364,7 +387,7 @@ function push_to_grid!(grid::SharedArray{Float64, 3},
 
 end
 
-# Abstract Boundary Version
+# Abstract Boundary Version (used by Parametric method)
 function push_to_grid!(grid::StateTypeL1,
                             charge::CC,
                             index_pos::II,
@@ -585,6 +608,15 @@ function construct_loop(wni::FieldVector{4,SVector})
     return zip(idx, wtx)
 end
 
+function construct_loop(wni::Tuple{Any, Any, Any})
+    nRemesh = length(wni[1])*length(wni[2])
+    idxs = [(xi, yi) for xi in wni[1], yi in wni[2]]
+    wtxs = [(wni[3][i, j], 1) for i in 1:length(wni[1]), j in 1:length(wni[2])]
+    idx = SVector{nRemesh,Tuple{Int,Int}}(idxs...)
+    wtx = SVector{nRemesh,Tuple{AbstractFloat,AbstractFloat}}(reshape(wtxs, nRemesh)...)
+    return zip(idx, wtx)
+end
+
 
 """
 wrapper over FieldVector weight&index (wni), 
@@ -627,25 +659,40 @@ wrapper over FieldVector weight&index (wni),
 """
 function push_to_grid!(grid::StateTypeL1,
     charge::CC,
-    wni::FieldVector,
-    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},SVector{13,Float64}}}
-    #@info "this is version D"
+    wni::II,
+    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Union{Vector{Float64},SVector{3,Float64},SVector{13,Float64}}, II<:Union{Tuple{Any, Any, Any},SVector{2,Int64},FieldVector}}
+    # @info "this is version D"
     for (i, w) in construct_loop(wni)
         push_to_grid!(grid, charge, i, w, Nx, Ny)
     end
 end
 
-# ----- Parametric push_to_grid -----
+# ----- Parametric CIC push_to_grid -----
 function push_to_grid!(grid::StateTypeL1,
     charge::CC,
     wni::FieldVector,
-    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Tuple{Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vararg{Matrix{Float64}, 4}}}
-    #@info "this is version D"
+    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Union{Tuple{Float64, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vector{Float64}, Vararg{Matrix{Float64}, 4}}}}#, II<:Union{Tuple{Any, Any, Any},SVector{2,Int64},FieldVector}}
     j = 1
     for (i, w) in construct_loop(wni)
         current_charge = [charge[1], charge[1+j]..., unfold(charge[5+j])...]
         push_to_grid!(grid, current_charge, i, w, Nx, Ny)
         j += 1
+    end
+end
+
+# ----- Parametric EXP push_to_grid -----
+function push_to_grid!(grid::StateTypeL1,
+    charge::CC,
+    wni::Tuple,
+    Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Tuple}
+    xis, yis, w = wni
+    nxis = length(xis)
+    nyis = length(yis)
+    for i in 1:nxis
+        for j in 1:nyis
+            current_charge = [charge[1], charge[(i-1)*nxis+j+1]..., unfold(charge[(i-1)*nxis+i+nxis*nyis+1])...]
+            push_to_grid!(grid, current_charge, (xis[i], yis[j]), (w[i,j],1.0), Nx, Ny)
+        end
     end
 end
 

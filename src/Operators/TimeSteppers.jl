@@ -554,7 +554,7 @@ function time_step!_advance(model::Abstract2DParametricModel, Δt::Float64, Fail
                                 model.ODEsettings.log_energy_maximum,
                                 model.ODEsettings.wind_min_squared,
                                 model.periodic_boundary,
-                                model.ODEdefaults, model.ODEsettings.log_energy_minimum)
+                                model.ODEdefaults, model.ODEsettings.log_energy_minimum, model.remeshing_kernel)
         temp_CFD += b
         temp_no_CFD += a
         if CFl > max_CFL

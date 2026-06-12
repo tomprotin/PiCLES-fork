@@ -86,7 +86,7 @@ function ParticleToNode!(PI::AbstractParticleInstance, S::StateTypeL1, G::TwoDGr
         nothing
 end
 
-function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{Float64}, S::StateTypeL1, G::MeshGrids, periodic_boundary::Bool)
+function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{Float64}, S::StateTypeL1, G::MeshGrids, periodic_boundary::Bool, remeshing_kernel::String)
 
         wind_speed    = sqrt(winds[1]^2 + winds[2]^2)
         particle_speed = sqrt(PI.ODEIntegrator.u[2]^2 + PI.ODEIntegrator.u[3]^2)
@@ -98,13 +98,23 @@ function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{F
         mesh_size = get_mesh_size(G.stats, ij_mesh)
 
         if particle_speed/wind_speed < 0.8 || PI.ODEIntegrator.u[1] < -7.      # TEMPORARY, TO BE CHANGED !!!!!!!
-                weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
-                u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, mesh_size)
+                if remeshing_kernel == "CIC"
+                        weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
+                        u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, mesh_size)
+                elseif remeshing_kernel == "EXP"
+                        weights_and_index = PIC.compute_weights_and_index_mininal_EXP(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
+                        u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, mesh_size)
+                end
                 PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
                 nothing
         else
-                weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
-                u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u, mesh_size)
+                if remeshing_kernel == "CIC"
+                        weights_and_index = PIC.compute_weights_and_index_mininal(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5])
+                        u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u, mesh_size, [0 0; 1 0; 0 1; 1 1])
+                elseif remeshing_kernel == "EXP"
+                        weights_and_index = PIC.compute_weights_and_index_mininal_EXP(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
+                        u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u, mesh_size, [-1 -1; -1 0; -1 1; -1 2; 0 -1; 0 0; 0 1; 0 2; 1 -1; 1 0; 1 1; 1 2; 2 -1; 2 0; 2 1; 2 2])
+                end
                 PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
                 nothing
         end
@@ -359,6 +369,7 @@ function advance!(PI::AbstractParametricParticleInstance,
                         periodic_boundary::Bool, 
                         default_particle::PP,
                         log_energy_minimum::Float64,
+                        remeshing_kernel::String
                         ) where {PP<:Union{ParticleDefaults,Nothing, Any}}
         #@show PI.position_ij
 
@@ -477,7 +488,7 @@ function advance!(PI::AbstractParametricParticleInstance,
         #if PI.ODEIntegrator.u[1] > -13.0 #ODEs.log_energy_minimum # the minimum enerçy is distributed to 4 neighbouring particles
         if PI.on 
                 wind = [winds.u(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t+DT), winds.v(PI.position_xy[1], PI.position_xy[2], PI.ODEIntegrator.t+DT)]
-                ParticleToNode!(PI, wind, S, Grid, periodic_boundary)
+                ParticleToNode!(PI, wind, S, Grid, periodic_boundary, remeshing_kernel)
         end
 
         if after[1] > 1 || after[2] > 1

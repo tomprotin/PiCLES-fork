@@ -159,7 +159,7 @@ function local_cov_speed_gaussian_2D(X, X0, cov)
         return res
 end
 
-function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
+function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}, remeshing_targets::Matrix{Int64}) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
 
         if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
                 ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
@@ -170,15 +170,22 @@ function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}) wher
                 error("input should be either Vector{Float64}, MVector{15,Float64} or ParticleDefaultsParam")
         end
 
+        nRemeshingTargets = size(remeshing_targets, 1)
+
         dx = mesh_size[1]
         dy = mesh_size[2]
         x = (x - floor(x)) * dx
         y = (y - floor(y)) * dy
+        # x = x*dx
+        # y = y*dy
 
-        ui_c_1 = local_mean_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        ui_c_2 = local_mean_speed_gaussian_2D([dx, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        ui_c_3 = local_mean_speed_gaussian_2D([0, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        ui_c_4 = local_mean_speed_gaussian_2D([dx, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        uis = [local_mean_speed_gaussian_2D([remeshing_targets[i,1]*dx, remeshing_targets[i,2]*dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M) for i in 1:nRemeshingTargets]
+
+        # ui_c_1 = local_mean_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # ui_c_2 = local_mean_speed_gaussian_2D([dx, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # ui_c_3 = local_mean_speed_gaussian_2D([0, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # ui_c_4 = local_mean_speed_gaussian_2D([dx, dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+
         # @info "dx: $dx, dy: $dy"
         # @info "x: $x, y: $y"
         # @info "ui_c̄_x: $ui_c̄_x, ui_c̄_y: $ui_c̄_y"
@@ -189,52 +196,63 @@ function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}) wher
         # @info "ui_c_4: $ui_c_4"
         # @info ""
 
-        c1_speed = speed(ui_c_1[1], ui_c_1[2])
-        c2_speed = speed(ui_c_2[1], ui_c_2[2])
-        c3_speed = speed(ui_c_3[1], ui_c_3[2])
-        c4_speed = speed(ui_c_4[1], ui_c_4[2])
+        c_speeds = [speed(uis[i]...) for i in 1:nRemeshingTargets]
+
+        # c1_speed = speed(ui_c_1[1], ui_c_1[2])
+        # c2_speed = speed(ui_c_2[1], ui_c_2[2])
+        # c3_speed = speed(ui_c_3[1], ui_c_3[2])
+        # c4_speed = speed(ui_c_4[1], ui_c_4[2])
 
         ui_e = exp(ui_lne)
-        m_x1 = ui_c_1[1] * ui_e / c1_speed^2 / 2
-        m_x2 = ui_c_2[1] * ui_e / c2_speed^2 / 2
-        m_x3 = ui_c_3[1] * ui_e / c3_speed^2 / 2
-        m_x4 = ui_c_4[1] * ui_e / c4_speed^2 / 2
-        m_y1 = ui_c_1[2] * ui_e / c1_speed^2 / 2
-        m_y2 = ui_c_2[2] * ui_e / c2_speed^2 / 2
-        m_y3 = ui_c_3[2] * ui_e / c3_speed^2 / 2
-        m_y4 = ui_c_4[2] * ui_e / c4_speed^2 / 2
+        ms = [uis[i] .* ui_e / c_speeds[i]^2 / 2 for i in 1:nRemeshingTargets]
 
+        # m_x1 = ui_c_1[1] * ui_e / c1_speed^2 / 2
+        # m_x2 = ui_c_2[1] * ui_e / c2_speed^2 / 2
+        # m_x3 = ui_c_3[1] * ui_e / c3_speed^2 / 2
+        # m_x4 = ui_c_4[1] * ui_e / c4_speed^2 / 2
+        # m_y1 = ui_c_1[2] * ui_e / c1_speed^2 / 2
+        # m_y2 = ui_c_2[2] * ui_e / c2_speed^2 / 2
+        # m_y3 = ui_c_3[2] * ui_e / c3_speed^2 / 2
+        # m_y4 = ui_c_4[2] * ui_e / c4_speed^2 / 2
 
-        ui_M_C1 = local_cov_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        ui_M_C2 = local_cov_speed_gaussian_2D([1, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        ui_M_C3 = local_cov_speed_gaussian_2D([0, 1], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        ui_M_C4 = local_cov_speed_gaussian_2D([1, 1], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
-        final_ui_M1 = [ui_M_C1[1,1] ui_M_C1[1,2] 0 0;
-                      ui_M_C1[2,1] ui_M_C1[2,2] 0 0;
-                      0 0 1 0;
-                      0 0 0 1
-        ]
-        final_ui_M2 = [ui_M_C2[1,1] ui_M_C2[1,2] 0 0;
-                      ui_M_C2[2,1] ui_M_C2[2,2] 0 0;
-                      0 0 1 0;
-                      0 0 0 1
-        ]
-        final_ui_M3 = [ui_M_C3[1,1] ui_M_C3[1,2] 0 0;
-                      ui_M_C3[2,1] ui_M_C3[2,2] 0 0;
-                      0 0 1 0;
-                      0 0 0 1
-        ]
-        final_ui_M4 = [ui_M_C4[1,1] ui_M_C4[1,2] 0 0;
-                      ui_M_C4[2,1] ui_M_C4[2,2] 0 0;
-                      0 0 1 0;
-                      0 0 0 1
-        ]
-        m_Mxk1 = final_ui_M1 * ui_e / c1_speed^2 / 2
-        m_Mxk2 = final_ui_M2 * ui_e / c2_speed^2 / 2
-        m_Mxk3 = final_ui_M3 * ui_e / c3_speed^2 / 2
-        m_Mxk4 = final_ui_M4 * ui_e / c4_speed^2 / 2
+        ui_Ms = [local_cov_speed_gaussian_2D([remeshing_targets[i,1]*dx, remeshing_targets[i,2]*dy], [ui_c̄_x, ui_c̄_y, x, y], ui_M) for i in 1:nRemeshingTargets]
 
-        return ui_e, [m_x1, m_y1], [m_x2, m_y2], [m_x3, m_y3], [m_x4, m_y4], m_Mxk1, m_Mxk2, m_Mxk3, m_Mxk4
+        # ui_M_C1 = local_cov_speed_gaussian_2D([0, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # ui_M_C2 = local_cov_speed_gaussian_2D([1, 0], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # ui_M_C3 = local_cov_speed_gaussian_2D([0, 1], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+        # ui_M_C4 = local_cov_speed_gaussian_2D([1, 1], [ui_c̄_x, ui_c̄_y, x, y], ui_M)
+
+        final_ui_Ms = [[ui_Ms[i] [0 0;0 0]; [0 0;0 0] [1 0; 0 1]] for i in 1:nRemeshingTargets]
+
+        # final_ui_M1 = [ui_M_C1[1,1] ui_M_C1[1,2] 0 0;
+        #               ui_M_C1[2,1] ui_M_C1[2,2] 0 0;
+        #               0 0 1 0;
+        #               0 0 0 1
+        # ]
+        # final_ui_M2 = [ui_M_C2[1,1] ui_M_C2[1,2] 0 0;
+        #               ui_M_C2[2,1] ui_M_C2[2,2] 0 0;
+        #               0 0 1 0;
+        #               0 0 0 1
+        # ]
+        # final_ui_M3 = [ui_M_C3[1,1] ui_M_C3[1,2] 0 0;
+        #               ui_M_C3[2,1] ui_M_C3[2,2] 0 0;
+        #               0 0 1 0;
+        #               0 0 0 1
+        # ]
+        # final_ui_M4 = [ui_M_C4[1,1] ui_M_C4[1,2] 0 0;
+        #               ui_M_C4[2,1] ui_M_C4[2,2] 0 0;
+        #               0 0 1 0;
+        #               0 0 0 1
+        # ]
+
+        m_Ms = [final_ui_Ms[i] * ui_e / c_speeds[i]^2 / 2 for i in 1:nRemeshingTargets]
+
+        # m_Mxk1 = final_ui_M1 * ui_e / c1_speed^2 / 2
+        # m_Mxk2 = final_ui_M2 * ui_e / c2_speed^2 / 2
+        # m_Mxk3 = final_ui_M3 * ui_e / c3_speed^2 / 2
+        # m_Mxk4 = final_ui_M4 * ui_e / c4_speed^2 / 2
+
+        return ui_e, ms..., m_Ms...
 end
 
 
