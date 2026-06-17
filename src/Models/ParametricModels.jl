@@ -59,6 +59,7 @@ mutable struct Parametric2D{Grid<:AbstractGrid,
                         wnds,
                         cur,
                         remKern,
+                        pltPath,
     Mstat} <: Abstract2DParametricModel where {Mstat<:Union{Nothing,stat},PCollection<:Union{Vector,Array,StructArray}}
     #Union{Vector,DArray}
     grid::Grid
@@ -88,6 +89,7 @@ mutable struct Parametric2D{Grid<:AbstractGrid,
     currents::cur      # u, v, currents
 
     remeshing_kernel::remKern # kernel used to remesh particles after they have moved
+    plot_savepath::pltPath   # directory where particle/mesh CSV output is written
 
     MovieState::Mstat     # state of of the model. Only used for producing movieframes
 
@@ -209,6 +211,7 @@ function Parametric2D(; grid::GG,
     boundary_type="same", # or "minimal", "same", default is same, only used if periodic_boundary is false
     CBsets=nothing,
     remeshing_kernel="CIC", # kernel used to remesh particles after they have moved, default is CIC (Cloud In Cell)
+    plot_savepath="plots/test_case_parametric/data",
     movie=false) where {PP<:Union{ParticleDefaults2D,String},GG<:AbstractGrid}
 
     # initialize state {SharedArray} given grid and layers
@@ -346,6 +349,7 @@ function Parametric2D(; grid::GG,
         winds,
         currents,
         remeshing_kernel,
+        plot_savepath,
         Mstat)
 end
 

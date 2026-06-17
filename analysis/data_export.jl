@@ -24,6 +24,7 @@
 data_path = pwd() * "/plots/test_case_parametric"
 # data_path = pwd() * "/plots/good_test_cases/test_case_parametric"
 # data_path = pwd() * "/plots/test_case_parametric_large_spectrum_7,5min_1000km_1000km"
+data_path = "/home/tprotin/Documents/Travail/datarmor-PiCLES/plots/test_case_parametric_EXP"
 out_path  = data_path * "/godot_export"
 
 # Set to true  if coordinates are geographic (lon/lat in degrees, spherical globe).

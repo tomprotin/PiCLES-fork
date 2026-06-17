@@ -33,7 +33,7 @@ import Plots as plt
 # =============================================================================
 
 DT      = 1hours
-t_final = 24hours
+t_final = 2hours
 r_g0    = 0.85
 
 # Swell characteristics
@@ -136,7 +136,8 @@ wave_model = Parametric2D(;
     periodic_boundary = false,
     minimal_particle  = FetchRelations.MinimalParticle(U10_ref, V10_ref, DT),
     movie             = true,
-    remeshing_kernel   = "EXP"
+    remeshing_kernel  = "EXP",
+    plot_savepath     = "plots/test_case_parametric/data"
 )
 
 
@@ -189,6 +190,6 @@ end
 # 7. Run
 # =============================================================================
 
-run!(wave_simulation, cash_store = true)
+run!(wave_simulation, cash_store = true, save_format = ("binary","csv"))
 
 @info "Simulation complete."
