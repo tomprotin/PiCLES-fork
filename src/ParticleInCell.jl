@@ -141,7 +141,7 @@ function compute_weights_and_index_mininal(g_pars::TwoDCartesianGridMesh, xp::Fl
 end
 
 """
-compute_weights_and_index_mininal_CIC(xp::Float64, yp:: Float64 )
+compute_weights_and_index_mininal(xp::Float64, yp:: Float64 )
 returns indexes and weights as FieldVector for in 2D for single x,y point
     returned indexes are in absolute coordindates to the particle node, calculated from :
     inputs:
@@ -175,10 +175,30 @@ function compute_weights_and_index_mininal_EXP(ij::II, xp::Float64, yp::Float64,
     xi = [xi[1]-1, xi[1], xi[2], xi[2]+1]
     yi = [yi[1]-1, yi[1], yi[2], yi[2]+1]
 
-    w = [gaussian_kernel((xp-floor(xp) + xi[2] - xi[i]) * dx, (yp-floor(yp) + yi[2] - yi[j]) * dy, cov_x, cov_y, cov_xy) for i in 1:4, j in 1:4]
-    w = w / sum(w)
+    xys = [(xi[j], yi[i]) for i in 1:4, j in 1:4]
+    xys = reshape(xys, 16)
 
-    return xi, yi, w
+    w = [gaussian_kernel((xp-floor(xp) + xi[2] - xys[i][1]) * dx, (yp-floor(yp) + yi[2] - xys[i][2]) * dy, cov_x, cov_y, cov_xy) for i in 1:16]
+    w1 = reshape(w, 16)
+
+    nLargest = 7
+    largestIndices = partialsortperm(w1, 1:nLargest, rev=true)
+    largestIndices = sort(largestIndices) # sort the indices to maintain order
+    w = w / sum(w[largestIndices]) # normalize the weights for the largest indices
+
+    xys = xys[largestIndices]
+
+    return xys, w, largestIndices
+end
+
+function compute_weights_and_index_mininal_PHY(ij::II, xp::Float64, yp::Float64, cov_x::Float64, cov_y::Float64, cov_xy::Float64, dx::Float64, dy::Float64) where {II<:Union{Tuple{Int,Int},CartesianIndex}}
+
+    """
+    2d wrapper for 1d function
+    """
+    res = compute_weights_and_index_mininal_EXP(ij, xp, yp, cov_x, cov_y, cov_xy, dx, dy)   # Temporary solution, should be replaced by a more physical kernel in the future
+
+    return res
 end
 
 """
@@ -685,14 +705,12 @@ function push_to_grid!(grid::StateTypeL1,
     charge::CC,
     wni::Tuple,
     Nx::AbstractBoundary, Ny::AbstractBoundary) where {CC<:Tuple}
-    xis, yis, w = wni
-    nxis = length(xis)
-    nyis = length(yis)
-    for i in 1:nxis
-        for j in 1:nyis
-            current_charge = [charge[1], charge[(i-1)*nxis+j+1]..., unfold(charge[(i-1)*nxis+i+nxis*nyis+1])...]
-            push_to_grid!(grid, current_charge, (xis[i], yis[j]), (w[i,j],1.0), Nx, Ny)
-        end
+    xys, w, largestIndices = wni
+    w = reshape(w', 16)
+    nis = length(xys)
+    for i in 1:length(largestIndices)
+        current_charge = [charge[1], charge[largestIndices[i]+1]..., unfold(charge[largestIndices[i]+16+1])...]
+        push_to_grid!(grid, current_charge, xys[i], (w[largestIndices[i]],1.0), Nx, Ny)
     end
 end
 

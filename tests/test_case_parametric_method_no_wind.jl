@@ -33,14 +33,14 @@ import Plots as plt
 # =============================================================================
 
 DT      = 1hours
-t_final = 2hours
+t_final = 48hours
 r_g0    = 0.85
 
 # Swell characteristics
 fp      = 0.071                         # peak frequency [Hz], period ≈ 14 s
 c_g     = 9.81 / (4π * fp)              # deep-water group speed ≈ 11 m/s
 θ_m     = 0                        # propagation direction [rad] from east (45° NE)
-β       = 20.0 / 180 * π                # directional half-width [rad]
+β       = 40.0 / 180 * π                # directional half-width [rad]
 σ_along = 0.75                          # speed spread along swell direction [m/s]
 
 σ_across = 2 * abs(tan(β / 2)) * c_g
@@ -190,6 +190,6 @@ end
 # 7. Run
 # =============================================================================
 
-run!(wave_simulation, cash_store = true, save_format = ("binary","csv"))
+run!(wave_simulation, cash_store = true, save_format = ("binary",))
 
 @info "Simulation complete."
