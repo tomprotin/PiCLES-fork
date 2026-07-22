@@ -32,14 +32,16 @@ import Plots as plt
 # 1. Parameters
 # =============================================================================
 
+remesh_kern = "CIC"
+output_dir = "plots/test_case_parametric/data"
 DT      = 1hours
-t_final = 48hours
+t_final = 2hours
 r_g0    = 0.85
 
 # Swell characteristics
 fp      = 0.071                         # peak frequency [Hz], period ≈ 14 s
 c_g     = 9.81 / (4π * fp)              # deep-water group speed ≈ 11 m/s
-θ_m     = 0                        # propagation direction [rad] from east (45° NE)
+θ_m     = 0.0 / 180 * π                # propagation direction [rad] from east (45° NE)
 β       = 40.0 / 180 * π                # directional half-width [rad]
 σ_along = 0.75                          # speed spread along swell direction [m/s]
 
@@ -136,8 +138,8 @@ wave_model = Parametric2D(;
     periodic_boundary = false,
     minimal_particle  = FetchRelations.MinimalParticle(U10_ref, V10_ref, DT),
     movie             = true,
-    remeshing_kernel  = "EXP",
-    plot_savepath     = "plots/test_case_parametric/data"
+    remeshing_kernel  = remesh_kern,
+    plot_savepath     = output_dir
 )
 
 
@@ -190,6 +192,6 @@ end
 # 7. Run
 # =============================================================================
 
-run!(wave_simulation, cash_store = true, save_format = ("binary",))
+run!(wave_simulation, cash_store = true, save_format = ("binary","csv"))
 
 @info "Simulation complete."
