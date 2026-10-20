@@ -4,11 +4,13 @@ using DifferentialEquations: OrdinaryDiffEq.ODEIntegrator, OrdinaryDiffEq.ODEPro
 
 using SharedArrays
 using StaticArrays
+using LinearAlgebra
+using SpecialFunctions
 
 using DocStringExtensions
 
 # Particle-Node interaction
-export GetParticleEnergyMomentum,GetParticleEnergyMomentumSwell, GetVariablesAtVertex, Get_u_FromShared, ParticleDefaultsParam, InitParticleInstance
+export GetParticleEnergyMomentum,GetParticleEnergyMomentumSwell, GetParticleEnergyMomentumSwellFPhy, GetParticleEnergyMomentumSwellPHY, GetVariablesAtVertex, Get_u_FromShared, ParticleDefaultsParam, InitParticleInstance
 export InitParticleValues
 
 #include("../Utils/FetchRelations.jl")
@@ -149,6 +151,16 @@ function GetParticleEnergyMomentum(z0::TT, mesh_size::Vector{Float64}) where {TT
         return SVector{13,Float64}(ui_e, m_x, m_y, unfold(m_Mxk)...)
 end
 
+function local_mean_speed_gaussian_2D_FPHY(X, X0, Sigmas)
+        X = [X[1] + floor(X0[3]), X[2] + floor(X0[4])]
+
+        c = X0[1] + sqrt(Sigmas[1,1]) * sqrt(X[1]^2+X[2]^2)/sqrt(X0[3]^2+X0[4]^2)
+        ϕ = atan(abs(X0[3]*X[2]-X0[4]*X[1]), X0[3]*X[1]+X0[4]*X[2])
+        θ = X0[2] + ϕ
+        res = [c, θ]
+        return res
+end
+
 function local_mean_speed_gaussian_2D(X, X0, cov)
         res = X0[1:2] + cov[1:2, 3:4] * inv(cov[3:4, 3:4]) * (X - X0[3:4])
         return res
@@ -251,6 +263,348 @@ function GetParticleEnergyMomentumSwell(z0::TT, mesh_size::Vector{Float64}, reme
         # m_Mxk2 = final_ui_M2 * ui_e / c2_speed^2 / 2
         # m_Mxk3 = final_ui_M3 * ui_e / c3_speed^2 / 2
         # m_Mxk4 = final_ui_M4 * ui_e / c4_speed^2 / 2
+
+        return ui_e, ms..., m_Ms...
+end
+
+
+function GetParticleEnergyMomentumSwellFPhy(z0::TT, mesh_size::Vector{Float64}, remeshing_targets::Matrix{Int64}) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
+
+        if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
+                ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_kxkx, ui_kxky, ui_kyky, ui_xkx, ui_xky, ui_ykx, ui_yky, ui_xx, ui_xy, ui_yy = z0
+                ui_M = fold([ui_kxkx, ui_kxky, ui_kyky, ui_xkx, ui_xky, ui_ykx, ui_yky, ui_xx, ui_xy, ui_yy])
+        elseif z0 isa ParticleDefaultsParam
+                ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_M = z0.lne, z0.c̄_x, z0.c̄_y, z0.x, z0.y, z0.cov_xk
+        else
+                error("input should be either Vector{Float64}, MVector{15,Float64} or ParticleDefaultsParam")
+        end
+
+        nRemeshingTargets = size(remeshing_targets, 1)
+
+        dx = mesh_size[1]
+        dy = mesh_size[2]
+
+        full_x = copy(x)
+        full_y = copy(y)
+
+        x = (x - floor(x)) * dx
+        y = (y - floor(y)) * dy
+
+        # Pre-compute useful quantities
+
+        R_02 = ui_c̄_x^2+ ui_c̄_y^2
+        R_0 = sqrt(R_02)
+        θ_0 = atan(ui_c̄_y, ui_c̄_x)
+        r_0hat = [cos(θ_0), sin(θ_0)]
+        t_0hat = [-sin(θ_0), cos(θ_0)]
+        K = [cos(θ_0) sin(θ_0); -sin(θ_0)/R_0 cos(θ_0)/R_0]
+
+        # Project the velocity covariance onto the new frame
+
+        v_r = transpose(r_0hat) * ui_M[1:2,1:2] * (r_0hat)
+        v_t = transpose(t_0hat) * ui_M[1:2,1:2] * (t_0hat)
+        v_rt = transpose(r_0hat) * ui_M[1:2,1:2] * (t_0hat)
+
+        # Compute the new mean and covariance
+
+        ui_M_Ctheta = [v_r v_rt/R_0; v_rt/R_0 v_t/R_02*(1+v_r/R_02)]
+        # ui_M_polar = [ui_M[1:2,1:2] ui_M[1:2,3:4]*transpose(K); K*ui_M[3:4,1:2] ui_M_Ctheta]
+        ui_M_polar = [ui_M_Ctheta ui_M[1:2,3:4]*transpose(K); K*ui_M[3:4,1:2] ui_M[3:4,3:4]]
+
+        ui_Ctheta = [sqrt(R_02+ui_M[1,1]+ui_M[2,2]-v_r), θ_0, x, y]
+
+        # Compute each local spectrum mean and covariance (in polar coordinates)
+
+        if speed(full_x,full_y) != 0
+                uis_polar = [local_mean_speed_gaussian_2D_FPHY([remeshing_targets[i,1], remeshing_targets[i,2]], [ui_Ctheta[1], ui_Ctheta[2], full_x, full_y], ui_M_polar) for i in 1:nRemeshingTargets]
+        else
+                uis_polar = [[ui_Ctheta[1], ui_Ctheta[2]] for i in 1:nRemeshingTargets]
+        end
+        ui_Ms_polar = [local_cov_speed_gaussian_2D([remeshing_targets[i,1]*dx, remeshing_targets[i,2]*dy], [R_0, θ_0, x, y], ui_M_polar) for i in 1:nRemeshingTargets]
+
+        # Change spectrum mean from polar to cartesian
+
+        as = (1+ui_Ms_polar[1][2,2])*ones(nRemeshingTargets)
+        bs = [-uis_polar[i][1]^2-ui_Ms_polar[1][1,1] for i in 1:nRemeshingTargets]
+        cs = [-uis_polar[i][1]^2*ui_Ms_polar[1][1,1] for i in 1:nRemeshingTargets]
+        Us = [(-bs[i]+sqrt(bs[i]^2-4*as[i]*cs[i]))/(2*as[i]) for i in 1:nRemeshingTargets]
+        R_0s = sqrt.(Us)
+        # @info R_0s, uis_polar
+        uis = [[R_0s[i]*cos(uis_polar[i][2]) R_0s[i]*sin(uis_polar[i][2])] for i in 1:nRemeshingTargets]
+        c_speeds = [speed(uis[i]...) for i in 1:nRemeshingTargets]
+
+        # Recover radial and tangential variances
+
+        v_rs = [ui_Ms_polar[i][1,1] for i in 1:nRemeshingTargets]
+        v_ts = [uis_polar[i][1]^2-Us[i] for i in 1:nRemeshingTargets]
+        v_rts = [R_0s[i]*ui_Ms_polar[i][1,2] for i in 1:nRemeshingTargets]
+
+        recovered_var = [[v_rs[i] v_rts[i]; v_rts[i] v_ts[i]] for i in 1:nRemeshingTargets]
+
+        # Change spectrum covariance from polar to cartesian
+
+        R_thetas = [[cos(uis_polar[i][2]) -sin(uis_polar[i][2]); sin(uis_polar[i][2]) cos(uis_polar[i][2])] for i in 1:nRemeshingTargets]
+        ui_Ms = [R_thetas[i]*recovered_var[i]*transpose(R_thetas[i]) for i in 1:nRemeshingTargets]
+
+        # Compute momentum for the mean and covariance
+
+        ui_e = exp(ui_lne)
+        ms = [uis[i] .* ui_e / c_speeds[i]^2 / 2 for i in 1:nRemeshingTargets]
+
+        final_ui_Ms = [[ui_Ms[i] [0 0;0 0]; [0 0;0 0] [1 0; 0 1]] for i in 1:nRemeshingTargets]
+
+        m_Ms = [final_ui_Ms[i] * ui_e / c_speeds[i]^2 / 2 for i in 1:nRemeshingTargets]
+        # m_Ms = [ui_M*ui_e/c_speeds[i]^2/2 for i in 1:nRemeshingTargets]
+
+        # # Testing if the remeshed covariances are PSD
+        # for i in 1:nRemeshingTargets
+        #         eig = eigvals(Symmetric(ui_M_polar))
+        #         if minimum(eig) < 0
+        #                 println(" ------- NOT PSD -------")
+        #                 println(ui_Ms[i])
+        #                 eig2 = eigvals(Symmetric(ui_M))
+        #                 if minimum(eig2) >= 0
+        #                         println(" ------- BUT ORIGNIAL MATRIX IS -------")
+        #                 end
+        #                 println()
+        #         end
+        # end
+
+        return [ui_e, ms..., m_Ms...], 0
+end
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Private helpers for the PHY remeshing algorithm
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Rice-distribution mean E[c] using exponentially-scaled Bessel to avoid overflow.
+# z = R0²/(4sc²); uses besselix(ν,z) = exp(-z)*Iν(z) so the exp(-z) factor in
+# the formula and the exp(+z) inside besselix cancel exactly.
+function _rice_mean(R0::Float64, sc::Float64)::Float64
+    z = R0^2 / (4 * sc^2)
+    return sc * sqrt(π / 2) * (besselix(0, z) * (1 + 2z) + 2z * besselix(1, z))
+end
+
+function _rice_mean_deriv(R0::Float64, sc::Float64)::Float64
+    h = 1e-6 * max(R0, 1.0)
+    return (_rice_mean(R0 + h, sc) - _rice_mean(R0 - h, sc)) / (2h)
+end
+
+# Angular variance Var[θ].
+function _angular_var(R0::Float64, sc::Float64)::Float64
+    k = R0 / sc
+    if k >= 4.0
+        return (1 / k^2) * (1 + 1 / k^2 + 5 / (2 * k^4))
+    else
+        N    = 200
+        dpsi = 2π / N
+        k2   = k^2
+        V    = 0.0
+        sqrt2 = sqrt(2.0)
+        sqrtpi2 = sqrt(π / 2)
+        for n in 0:(N-1)
+            psi = -π + n * dpsi
+            a   = k * cos(psi)
+            p   = exp(-k2 / 2) / (2π) * (1 + sqrtpi2 * a * exp(a^2 / 2) * (1 + erf(a / sqrt2)))
+            V  += psi^2 * p * dpsi
+        end
+        return V
+    end
+end
+
+# κ_θ = sc² · E[cos(ψ)/c]
+# Uses a 2D trapezoidal quadrature: outer ψ ∈ [-π,π] (100 pts),
+# inner c ∈ [max(0, R0-8sc), R0+8sc] (200 pts).
+# Returns 0 if R0 is too small (undefined direction).
+function _kappa_theta(R0::Float64, sc::Float64)::Float64
+    R0 < 1e-8 && return 0.0
+    sc2   = sc^2
+    Npsi  = 100;  dpsi  = 2π / Npsi
+    Nc    = 200
+    c_lo  = max(0.0, R0 - 8sc);  c_hi = R0 + 8sc;  dc = (c_hi - c_lo) / Nc
+    J = 0.0
+    for np in 0:(Npsi-1)
+        psi   = -π + np * dpsi
+        cospsi = cos(psi)
+        for nc in 0:(Nc-1)
+            c = c_lo + nc * dc
+            c < 1e-14 && continue
+            exponent = -((c * cospsi - R0)^2 + (c * sin(psi))^2) / (2sc2)
+            exponent < -40 && continue
+            g  = (cospsi / c) * (c / (2π * sc2)) * exp(exponent)
+            J += g * c * dpsi * dc
+        end
+    end
+    return sc2 * J
+end
+
+# Symmetric square-root and its inverse for a 2×2 PSD matrix A.
+# Returns (A^(1/2), A^(-1/2)) via eigendecomposition.
+# A small regularisation prevents division by zero for near-singular inputs.
+function _sym_sqrt_2x2(A::Matrix{Float64})
+    F    = eigen(Symmetric(A))
+    lam  = max.(F.values, 1e-14)
+    Q    = F.vectors
+    sqrtA    = Q * Diagonal(sqrt.(lam)) * Q'
+    invsqrtA = Q * Diagonal(1 ./ sqrt.(lam)) * Q'
+    return sqrtA, invsqrtA
+end
+
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Isotropise the velocity block of ui_M (ordered cx,cy,x,y), preserving
+# the total 4D area
+function isotropize_covariance(ui_M::Matrix{Float64})
+    ΣCC = ui_M[1:2, 1:2]
+    ΣXX = ui_M[3:4, 3:4]
+    ΣXC = ui_M[3:4, 1:2]   # rows = x,y; cols = cx,cy
+
+    sigma_cx = sqrt(ΣCC[1, 1]);  sigma_cy = sqrt(ΣCC[2, 2])
+    sigma_x  = sqrt(ΣXX[1, 1]);  sigma_y  = sqrt(ΣXX[2, 2])
+
+    s2c    = sigma_cx * sigma_cy          # isotropic variance
+    sc     = sqrt(s2c)                    # isotropic std dev
+    alpha1 = ΣCC[1, 2] / (sigma_cx * sigma_cy)
+    beta   = (1 - alpha1)^0.25
+
+    sigma_X = (sigma_x, sigma_y)
+    sigma_C = (sigma_cx, sigma_cy)
+    T = zeros(2, 2)
+    for i in 1:2, j in 1:2
+        alpha_ij = ΣXC[i, j] / (sigma_X[i] * sigma_C[j])
+        T[i, j]  = (1 - beta * (1 - alpha_ij)) * sigma_X[i] * sc
+    end
+
+    M_iso        = copy(ui_M)
+    M_iso[1:2, 1:2] = s2c * I(2)
+    M_iso[3:4, 1:2] = T
+    M_iso[1:2, 3:4] = T'
+    return M_iso
+end
+
+# Repair positive semi-definiteness of an isotropised covariance via SVD clipping
+# of the cross block
+function ensure_psd(ui_M::Matrix{Float64})
+    ΣXX = ui_M[3:4, 3:4]
+    T   = ui_M[3:4, 1:2]   # cross block; rows=x,y, cols=cx,cy
+    s2c = ui_M[1, 1]        # isotropic velocity variance
+    sc  = sqrt(s2c)
+
+    # Schur complement test: M = ΣXX - (1/s2c)*T*T' ≥ 0
+    M   = ΣXX - (T * T') / s2c
+    lam = eigvals(Symmetric(M))
+    minimum(lam) >= 0 && return ui_M   # already feasible
+
+    # SVD clip: whiten, clip singular values to 1, unwhiten
+    sqrtXX, invsqrtXX = _sym_sqrt_2x2(ΣXX)
+    K  = invsqrtXX * T / sc
+    F  = svd(K)
+    s_clipped = min.(F.S, 1.0)
+    K_star  = F.U * Diagonal(s_clipped) * F.Vt
+    B_star  = sqrtXX * K_star * sc
+
+    M_psd        = copy(ui_M)
+    M_psd[3:4, 1:2] = B_star
+    M_psd[1:2, 3:4] = B_star'
+    return M_psd
+end
+
+# Transform an isotropised+PSD-repaired covariance (cx,cy,x,y ordering) to
+# polar-speed (c,θ,x,y) coordinates via the exact Gaussian Stein/Rice formulas
+# Returns: (polar_cov 4×4, E_c, theta_0)
+function transform_to_polar_speed_coordinates(ui_M::Matrix{Float64},
+                                               cx_mean::Float64,
+                                               cy_mean::Float64)
+    R0      = sqrt(cx_mean^2 + cy_mean^2)
+    theta_0 = atan(cy_mean, cx_mean)
+    s2c     = ui_M[1, 1]   # isotropic velocity variance
+    sc      = sqrt(s2c)
+    B_star  = ui_M[3:4, 1:2]   # repaired cross block; rows=x,y; cols=cx,cy
+    ΣXX     = ui_M[3:4, 3:4]
+
+    # Degenerate case: mean velocity at origin
+    if R0 < 1e-8
+        E_c    = sc * sqrt(π / 2)
+        Var_c  = s2c * (2 - π / 2)
+        Var_th = π^2 / 3
+        polar_cov = [Var_c  0.0  0.0  0.0;
+                     0.0  Var_th  0.0  0.0;
+                     0.0   0.0  ΣXX[1,1]  ΣXX[1,2];
+                     0.0   0.0  ΣXX[2,1]  ΣXX[2,2]]
+        return polar_cov, E_c, theta_0
+    end
+
+    E_c     = _rice_mean(R0, sc)
+    Var_c   = 2s2c + R0^2 - E_c^2
+    Var_th  = _angular_var(R0, sc)
+    kappa_c = s2c * _rice_mean_deriv(R0, sc)
+    kappa_t = _kappa_theta(R0, sc)
+
+    # B = Σ'_XC · Σ'_CC^{-1} = B_star / s2c
+    B     = B_star / s2c
+    r_hat = [cos(theta_0),  sin(theta_0)]
+    t_hat = [-sin(theta_0), cos(theta_0)]
+
+    Cov_Xc  = kappa_c * (B * r_hat)   # 2-vector: Cov(x,c), Cov(y,c)
+    Cov_Xth = kappa_t * (B * t_hat)   # 2-vector: Cov(x,θ), Cov(y,θ)
+
+    # Polar covariance in (c, θ, x, y) ordering:
+    polar_cov = [Var_c       0.0         Cov_Xc[1]   Cov_Xc[2]  ;
+                 0.0         Var_th      Cov_Xth[1]  Cov_Xth[2] ;
+                 Cov_Xc[1]  Cov_Xth[1]  ΣXX[1, 1]   ΣXX[1, 2]  ;
+                 Cov_Xc[2]  Cov_Xth[2]  ΣXX[2, 1]   ΣXX[2, 2]  ]
+
+    return polar_cov, E_c, theta_0
+end
+
+function GetParticleEnergyMomentumSwellPHY(z0::TT, mesh_size::Vector{Float64}, remeshing_targets::Matrix{Int64}) where {TT<:Union{Vector{Float64},MVector{15,Float64},ParticleDefaultsParam}}
+
+        if z0 isa Vector{Float64} || z0 isa MVector{15,Float64}
+                ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky = z0
+                ui_M = fold([ui_xx, ui_xy, ui_yy, ui_xkx, ui_ykx, ui_xky, ui_yky, ui_kxkx, ui_kxky, ui_kyky])
+        elseif z0 isa ParticleDefaultsParam
+                ui_lne, ui_c̄_x, ui_c̄_y, x, y, ui_M = z0.lne, z0.c̄_x, z0.c̄_y, z0.x, z0.y, z0.cov_xk
+        else
+                error("input should be either Vector{Float64}, MVector{15,Float64} or ParticleDefaultsParam")
+        end
+
+        ui_M_iso               = isotropize_covariance(ui_M)
+        ui_M_psd               = ensure_psd(ui_M_iso)
+        polar_cov, E_c, theta0 = transform_to_polar_speed_coordinates(ui_M_psd, ui_c̄_x, ui_c̄_y)
+
+        nRemeshingTargets = size(remeshing_targets, 1)
+
+        dx = mesh_size[1]
+        dy = mesh_size[2]
+        x = (x - floor(x)) * dx
+        y = (y - floor(y)) * dy
+
+        # Polar mean: [E_c, θ₀, x_particle, y_particle]
+        polar_mean = [E_c, theta0, x, y]
+
+        # Conditional mean (c, θ) at each remeshing target in polar space
+        uis_polar = [local_mean_speed_gaussian_2D(
+                         [remeshing_targets[i,1]*dx, remeshing_targets[i,2]*dy],
+                         polar_mean, polar_cov)
+                     for i in 1:nRemeshingTargets]
+
+        # Convert (c, θ) back to (cx, cy) — each corner uses its own speed,
+        # which eliminates the normalisation bug present in the EXP kernel.
+        uis      = [SVector{2,Float64}(uis_polar[i][1] * cos(uis_polar[i][2]),
+                                        uis_polar[i][1] * sin(uis_polar[i][2]))
+                    for i in 1:nRemeshingTargets]
+        c_speeds = [speed(uis[i]...) for i in 1:nRemeshingTargets]
+
+        ui_e = exp(ui_lne)
+        ms = [uis[i] .* ui_e / c_speeds[i]^2 / 2 for i in 1:nRemeshingTargets]
+
+        ui_Ms = [local_cov_speed_gaussian_2D([remeshing_targets[i,1]*dx, remeshing_targets[i,2]*dy],
+                     polar_mean, polar_cov) for i in 1:nRemeshingTargets]
+
+        final_ui_Ms = [[ui_Ms[i] [0 0;0 0]; [0 0;0 0] [1 0; 0 1]] for i in 1:nRemeshingTargets]
+
+        m_Ms = [final_ui_Ms[i] * ui_e / c_speeds[i]^2 / 2 for i in 1:nRemeshingTargets]
 
         return ui_e, ms..., m_Ms...
 end

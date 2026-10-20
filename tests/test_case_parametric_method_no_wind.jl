@@ -35,13 +35,13 @@ import Plots as plt
 remesh_kern = "CIC"
 output_dir = "plots/test_case_parametric/data"
 DT      = 1hours
-t_final = 2hours
+t_final = 48hours
 r_g0    = 0.85
 
 # Swell characteristics
 fp      = 0.071                         # peak frequency [Hz], period ≈ 14 s
 c_g     = 9.81 / (4π * fp)              # deep-water group speed ≈ 11 m/s
-θ_m     = 0.0 / 180 * π                # propagation direction [rad] from east (45° NE)
+θ_m     = 45.0 / 180 * π                # propagation direction [rad] from east (45° NE)
 β       = 40.0 / 180 * π                # directional half-width [rad]
 σ_along = 0.75                          # speed spread along swell direction [m/s]
 
@@ -55,7 +55,7 @@ E_max   = Hs_max^2 / 16                 # peak wave energy [m²]
 
 # Initial swell patch centre and spatial spread
 x0  = 400e3                               # patch centre x [m]
-y0  = 3300e3                            # patch centre y [m]
+y0  = 400e3                            # patch centre y [m]
 σ_x = 25e3                             # spatial spread in x [m]
 σ_y = 25e3                             # spatial spread in y [m]
 

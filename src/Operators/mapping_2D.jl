@@ -23,6 +23,8 @@ using ..core_2D_spread: InitParticleInstance as StochasticInitParticleInstance
 
 using ..core_2D_parametric: GetParticleEnergyMomentum as GetParticleEnergyMomentumWindSeaParam
 using ..core_2D_parametric: GetParticleEnergyMomentumSwell as GetParticleEnergyMomentumSwellParam
+using ..core_2D_parametric: GetParticleEnergyMomentumSwellPHY as GetParticleEnergyMomentumSwellParamPHY
+using ..core_2D_parametric: GetParticleEnergyMomentumSwellFPhy as GetParticleEnergyMomentumSwellParamFPHY
 using ..core_2D_parametric: GetVariablesAtVertex as GetVariablesAtVertexParam
 using ..core_2D_parametric: Get_u_FromShared as Get_u_FromSharedParam
 using ..core_2D_parametric: ResetParticleValues as ResetParticleValuesParam
@@ -109,8 +111,19 @@ function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{F
                         Sigmas = [fold(u_state[4:end]) for _ in 1:16]
                         u_state = u_state[1], ms..., Sigmas...
                 elseif remeshing_kernel == "PHY"
-                        weights_and_index = PIC.compute_weights_and_index_mininal_PHY(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
+                        xys, w, largestIndices = PIC.compute_weights_and_index_mininal_PHY(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
                         u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, mesh_size)
+                        weights_and_index = (xys, w, largestIndices)
+                        ms = [[u_state[2], u_state[3]] for _ in 1:16]
+                        Sigmas = [fold(u_state[4:end]) for _ in 1:16]
+                        u_state = u_state[1], ms..., Sigmas...
+                elseif remeshing_kernel == "FPHY"
+                        xys, w, largestIndices = PIC.compute_weights_and_index_mininal_PHY(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
+                        u_state = GetParticleEnergyMomentumWindSeaParam(PI.ODEIntegrator.u, mesh_size)
+                        weights_and_index = (xys, w, largestIndices)
+                        ms = [[u_state[2], u_state[3]] for _ in 1:16]
+                        Sigmas = [fold(u_state[4:end]) for _ in 1:16]
+                        u_state = u_state[1], ms..., Sigmas...
                 end
                 PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
                 nothing
@@ -123,9 +136,12 @@ function ParticleToNode!(PI::AbstractParametricParticleInstance, winds::Vector{F
                         u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u, mesh_size, [-1 -1; -1 0; -1 1; -1 2; 0 -1; 0 0; 0 1; 0 2; 1 -1; 1 0; 1 1; 1 2; 2 -1; 2 0; 2 1; 2 2])
                 elseif remeshing_kernel == "PHY"
                         weights_and_index = PIC.compute_weights_and_index_mininal_PHY(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
-                        u_state = GetParticleEnergyMomentumSwellParam(PI.ODEIntegrator.u, mesh_size, [-1 -1; -1 0; -1 1; -1 2; 0 -1; 0 0; 0 1; 0 2; 1 -1; 1 0; 1 1; 1 2; 2 -1; 2 0; 2 1; 2 2])
+                        u_state = GetParticleEnergyMomentumSwellParamPHY(PI.ODEIntegrator.u, mesh_size, [-1 -1; -1 0; -1 1; -1 2; 0 -1; 0 0; 0 1; 0 2; 1 -1; 1 0; 1 1; 1 2; 2 -1; 2 0; 2 1; 2 2])
+                elseif remeshing_kernel == "FPHY"
+                        weights_and_index = PIC.compute_weights_and_index_mininal_PHY(PI.position_ij, PI.ODEIntegrator.u[4], PI.ODEIntegrator.u[5], PI.ODEIntegrator.u[13], PI.ODEIntegrator.u[15], PI.ODEIntegrator.u[14], mesh_size[1], mesh_size[2])
+                        u_state, weights = GetParticleEnergyMomentumSwellParamFPHY(PI.ODEIntegrator.u, mesh_size, [-1 -1; -1 0; -1 1; -1 2; 0 -1; 0 0; 0 1; 0 2; 1 -1; 1 0; 1 1; 1 2; 2 -1; 2 0; 2 1; 2 2])
                 end
-                PIC.push_to_grid!(S, u_state, weights_and_index, G.stats.Nx, G.stats.Ny)
+                PIC.push_to_grid!(S, Tuple(u_state), weights_and_index, G.stats.Nx, G.stats.Ny)
                 nothing
         end
 end

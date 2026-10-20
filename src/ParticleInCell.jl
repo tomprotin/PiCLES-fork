@@ -193,12 +193,26 @@ end
 
 function compute_weights_and_index_mininal_PHY(ij::II, xp::Float64, yp::Float64, cov_x::Float64, cov_y::Float64, cov_xy::Float64, dx::Float64, dy::Float64) where {II<:Union{Tuple{Int,Int},CartesianIndex}}
 
-    """
-    2d wrapper for 1d function
-    """
-    res = compute_weights_and_index_mininal_EXP(ij, xp, yp, cov_x, cov_y, cov_xy, dx, dy)   # Temporary solution, should be replaced by a more physical kernel in the future
+    xi, xw = get_absolute_i_and_w(xp, ij[1])
+    yi, yw = get_absolute_i_and_w(yp, ij[2])
 
-    return res
+    xi = [xi[1]-1, xi[1], xi[2], xi[2]+1]
+    yi = [yi[1]-1, yi[1], yi[2], yi[2]+1]
+
+    xys = [(xi[j], yi[i]) for i in 1:4, j in 1:4]
+    xys = reshape(xys, 16)
+
+    w = [gaussian_kernel((xp-floor(xp) + xi[2] - xys[i][1]) * dx, (yp-floor(yp) + yi[2] - xys[i][2]) * dy, cov_x, cov_y, cov_xy) for i in 1:16]
+    w1 = reshape(w, 16)
+
+    nLargest = 16
+    largestIndices = partialsortperm(w1, 1:nLargest, rev=true)
+    largestIndices = sort(largestIndices) # sort the indices to maintain order
+    w = w / sum(w[largestIndices]) # normalize the weights for the largest indices
+
+    xys = xys[largestIndices]
+
+    return xys, w, largestIndices
 end
 
 """
